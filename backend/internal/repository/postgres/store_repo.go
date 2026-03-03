@@ -34,7 +34,7 @@ func (r *storeRepository) Create(ctx context.Context, store *model.Store) error 
 func (r *storeRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Store, error) {
 	store := &model.Store{}
 	var settingsJSON []byte
-	query := `SELECT id, name, code, address, phone, email, logo_url, is_active, settings, created_at, updated_at, deleted_at
+	query := `SELECT id, name, code, COALESCE(address,''), COALESCE(phone,''), COALESCE(email,''), COALESCE(logo_url,''), is_active, COALESCE(settings,'{}'), created_at, updated_at, deleted_at
 		FROM stores WHERE id = $1 AND deleted_at IS NULL`
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&store.ID, &store.Name, &store.Code, &store.Address, &store.Phone, &store.Email,
@@ -53,7 +53,7 @@ func (r *storeRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Sto
 func (r *storeRepository) GetByCode(ctx context.Context, code string) (*model.Store, error) {
 	store := &model.Store{}
 	var settingsJSON []byte
-	query := `SELECT id, name, code, address, phone, email, logo_url, is_active, settings, created_at, updated_at, deleted_at
+	query := `SELECT id, name, code, COALESCE(address,''), COALESCE(phone,''), COALESCE(email,''), COALESCE(logo_url,''), is_active, COALESCE(settings,'{}'), created_at, updated_at, deleted_at
 		FROM stores WHERE code = $1 AND deleted_at IS NULL`
 	err := r.db.QueryRow(ctx, query, code).Scan(
 		&store.ID, &store.Name, &store.Code, &store.Address, &store.Phone, &store.Email,
@@ -70,7 +70,7 @@ func (r *storeRepository) GetByCode(ctx context.Context, code string) (*model.St
 }
 
 func (r *storeRepository) GetAll(ctx context.Context) ([]model.Store, error) {
-	query := `SELECT id, name, code, address, phone, email, logo_url, is_active, settings, created_at, updated_at, deleted_at
+	query := `SELECT id, name, code, COALESCE(address,''), COALESCE(phone,''), COALESCE(email,''), COALESCE(logo_url,''), is_active, COALESCE(settings,'{}'), created_at, updated_at, deleted_at
 		FROM stores WHERE deleted_at IS NULL ORDER BY name`
 	rows, err := r.db.Query(ctx, query)
 	if err != nil {
