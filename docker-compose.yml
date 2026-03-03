@@ -1,0 +1,135 @@
+version: '3.9'
+
+services:
+  # ==========================================
+  # Database Services
+  # ==========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: zplus-postgres
+    environment:
+      POSTGRES_DB: ${PG_DATABASE:-zplus_pos}
+      POSTGRES_USER: ${PG_USER:-zplus_user}
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-zplus_secret}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER:-zplus_user} -d ${PG_DATABASE:-zplus_pos}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  mongodb:
+    image: mongo:7
+    container_name: zplus-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:-zplus_user}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:-zplus_secret}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-zplus_pos}
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+      - ./migrations/mongodb/init_indexes.js:/docker-entrypoint-initdb.d/init_indexes.js:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: zplus-redis
+    command: redis-server --requirepass ${REDIS_PASSWORD:-zplus_secret} --maxmemory 256mb --maxmemory-policy allkeys-lru --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-zplus_secret}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ==========================================
+  # Infrastructure Services
+  # ==========================================
+  minio:
+    image: minio/minio:latest
+    container_name: zplus-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-minio_admin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minio_secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  nats:
+    image: nats:latest
+    container_name: zplus-nats
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: "-js -m 8222"
+    restart: unless-stopped
+
+  # ==========================================
+  # Management Tools (Development only)
+  # ==========================================
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: zplus-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@zplus.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    profiles:
+      - tools
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: zplus-mongo-express
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: ${MONGO_USER:-zplus_user}
+      ME_CONFIG_MONGODB_ADMINPASSWORD: ${MONGO_PASSWORD:-zplus_secret}
+      ME_CONFIG_MONGODB_URL: mongodb://${MONGO_USER:-zplus_user}:${MONGO_PASSWORD:-zplus_secret}@mongodb:27017/
+      ME_CONFIG_BASICAUTH: "false"
+    ports:
+      - "8081:8081"
+    depends_on:
+      - mongodb
+    profiles:
+      - tools
+
+  redis-insight:
+    image: redis/redisinsight:latest
+    container_name: zplus-redis-insight
+    ports:
+      - "5540:5540"
+    depends_on:
+      - redis
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  mongodb_data:
+  redis_data:
+  minio_data:

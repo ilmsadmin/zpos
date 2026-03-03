@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+backend/bin/
+frontend/.next/
+frontend/out/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Coverage
+*.out
+coverage/
+coverage.html
+
+# Docker volumes
+postgres_data/
+mongodb_data/
+redis_data/
+minio_data/
+
+# Temp
+tmp/
+temp/
+
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+vendor/
+backend/main
+
+# Backups
+backups/

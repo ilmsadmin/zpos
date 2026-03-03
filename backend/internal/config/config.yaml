@@ -1,0 +1,43 @@
+app:
+  name: zplus-pos
+  version: 1.0.0
+  env: development
+  port: 8080
+  allow_origins: "http://localhost:3000,http://localhost:3001"
+
+postgres:
+  host: localhost
+  port: 5432
+  user: zplus_user
+  password: zplus_secret
+  database: zplus_pos
+  ssl_mode: disable
+  max_conns: 50
+  min_conns: 10
+
+mongodb:
+  uri: "mongodb://zplus_user:zplus_secret@localhost:27017/zplus_pos?authSource=admin"
+  database: zplus_pos
+
+redis:
+  host: localhost
+  port: 6379
+  password: zplus_secret
+  db: 0
+
+auth:
+  access_token_duration: 15m
+  refresh_token_duration: 168h
+  token_secret: "your-token-secret-minimum-32-characters!!"
+
+storage:
+  type: minio
+  minio:
+    endpoint: "localhost:9000"
+    access_key: minio_admin
+    secret_key: minio_secret
+    bucket: zplus-pos
+    use_ssl: false
+
+nats:
+  url: "nats://localhost:4222"
