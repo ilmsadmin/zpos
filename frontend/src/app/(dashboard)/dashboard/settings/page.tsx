@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Save, User, Shield, Bell, Palette, Store } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Save, User, Shield, Bell, Palette, Store, Sun, Moon, Monitor } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,23 +24,108 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { PageHeader } from "@/components/page-header";
 import { useAuthStore } from "@/stores/auth-store";
 import { authService } from "@/services/auth-service";
 import { storeService } from "@/services/store-service";
+import { cn } from "@/lib/utils";
+
+// --- Notification preferences (localStorage) ---
+const NOTIFICATION_STORAGE_KEY = "zplus-notification-prefs";
+
+interface NotificationPrefs {
+  new_order: boolean;
+  low_stock: boolean;
+  warranty_expiry: boolean;
+  warranty_request: boolean;
+  daily_report: boolean;
+}
+
+const defaultNotificationPrefs: NotificationPrefs = {
+  new_order: true,
+  low_stock: true,
+  warranty_expiry: false,
+  warranty_request: true,
+  daily_report: false,
+};
+
+function loadNotificationPrefs(): NotificationPrefs {
+  if (typeof window === "undefined") return defaultNotificationPrefs;
+  try {
+    const raw = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
+    if (raw) return { ...defaultNotificationPrefs, ...JSON.parse(raw) };
+  } catch {
+    // ignore
+  }
+  return defaultNotificationPrefs;
+}
+
+function saveNotificationPrefs(prefs: NotificationPrefs) {
+  localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(prefs));
+}
+
+// --- Language preference (localStorage) ---
+const LANGUAGE_STORAGE_KEY = "zplus-language";
+
+function loadLanguage(): string {
+  if (typeof window === "undefined") return "vi";
+  return localStorage.getItem(LANGUAGE_STORAGE_KEY) || "vi";
+}
+
+function saveLanguage(lang: string) {
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+}
 
 export default function SettingsPage() {
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const queryClient = useQueryClient();
+  const { theme, setTheme } = useTheme();
+  const [mounted, setMounted] = useState(false);
 
-  // Profile form
+  useEffect(() => setMounted(true), []);
+
+  // ─── Profile ───────────────────────────────
   const [profileForm, setProfileForm] = useState({
     full_name: user?.full_name || "",
     email: user?.email || "",
     phone: user?.phone || "",
   });
 
-  // Store form
+  // Sync profile form when user changes (e.g. after mutation)
+  useEffect(() => {
+    if (user) {
+      setProfileForm({
+        full_name: user.full_name || "",
+        email: user.email || "",
+        phone: user.phone || "",
+      });
+    }
+  }, [user]);
+
+  const updateProfileMutation = useMutation({
+    mutationFn: () =>
+      authService.updateProfile({
+        full_name: profileForm.full_name,
+        phone: profileForm.phone,
+      }),
+    onSuccess: (updatedUser) => {
+      setUser(updatedUser);
+      toast.success("Đã cập nhật hồ sơ thành công");
+    },
+    onError: () => toast.error("Không thể cập nhật hồ sơ"),
+  });
+
+  const handleSaveProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profileForm.full_name.trim()) {
+      toast.error("Họ và tên không được để trống");
+      return;
+    }
+    updateProfileMutation.mutate();
+  };
+
+  // ─── Store ─────────────────────────────────
   const [storeForm, setStoreForm] = useState({
     name: "",
     phone: "",
@@ -50,7 +136,6 @@ export default function SettingsPage() {
     vat: "10",
   });
 
-  // Fetch store data
   const { data: stores } = useQuery({
     queryKey: ["stores"],
     queryFn: () => storeService.getAll(),
@@ -95,7 +180,7 @@ export default function SettingsPage() {
     onError: () => toast.error("Không thể cập nhật thông tin cửa hàng"),
   });
 
-  // Password form
+  // ─── Security ──────────────────────────────
   const [passwordForm, setPasswordForm] = useState({
     current_password: "",
     new_password: "",
@@ -128,6 +213,44 @@ export default function SettingsPage() {
     changePasswordMutation.mutate();
   };
 
+  // ─── Notifications ─────────────────────────
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(defaultNotificationPrefs);
+
+  useEffect(() => {
+    setNotifPrefs(loadNotificationPrefs());
+  }, []);
+
+  const toggleNotif = (key: keyof NotificationPrefs) => {
+    const updated = { ...notifPrefs, [key]: !notifPrefs[key] };
+    setNotifPrefs(updated);
+    saveNotificationPrefs(updated);
+    toast.success(
+      updated[key] ? "Đã bật thông báo" : "Đã tắt thông báo"
+    );
+  };
+
+  const notificationItems: { key: keyof NotificationPrefs; title: string; desc: string }[] = [
+    { key: "new_order", title: "Đơn hàng mới", desc: "Nhận thông báo khi có đơn hàng mới" },
+    { key: "low_stock", title: "Tồn kho thấp", desc: "Cảnh báo khi sản phẩm sắp hết hàng" },
+    { key: "warranty_expiry", title: "Bảo hành hết hạn", desc: "Nhắc nhở khi bảo hành sắp hết hạn" },
+    { key: "warranty_request", title: "Yêu cầu bảo hành", desc: "Thông báo yêu cầu bảo hành mới" },
+    { key: "daily_report", title: "Báo cáo hàng ngày", desc: "Gửi email báo cáo doanh thu cuối ngày" },
+  ];
+
+  // ─── Language ──────────────────────────────
+  const [language, setLanguage] = useState("vi");
+
+  useEffect(() => {
+    setLanguage(loadLanguage());
+  }, []);
+
+  const handleLanguageChange = (lang: string) => {
+    setLanguage(lang);
+    saveLanguage(lang);
+    toast.success(lang === "vi" ? "Đã chuyển sang Tiếng Việt" : "Switched to English");
+  };
+
+  // ─── Render ────────────────────────────────
   return (
     <div className="space-y-6">
       <PageHeader title="Cài đặt" description="Quản lý cấu hình hệ thống" />
@@ -151,52 +274,68 @@ export default function SettingsPage() {
           </TabsTrigger>
         </TabsList>
 
-        {/* Profile */}
+        {/* ── Profile ─────────────────────────── */}
         <TabsContent value="profile">
           <Card>
             <CardHeader>
               <CardTitle>Thông tin cá nhân</CardTitle>
               <CardDescription>Cập nhật thông tin tài khoản của bạn</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Họ và tên</Label>
-                  <Input
-                    value={profileForm.full_name}
-                    onChange={(e) =>
-                      setProfileForm({ ...profileForm, full_name: e.target.value })
-                    }
-                  />
+            <CardContent>
+              <form onSubmit={handleSaveProfile} className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="profile-name">Họ và tên</Label>
+                    <Input
+                      id="profile-name"
+                      value={profileForm.full_name}
+                      onChange={(e) =>
+                        setProfileForm({ ...profileForm, full_name: e.target.value })
+                      }
+                      placeholder="Nhập họ và tên"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="profile-email">Email</Label>
+                    <Input
+                      id="profile-email"
+                      value={profileForm.email}
+                      type="email"
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="profile-phone">Số điện thoại</Label>
+                    <Input
+                      id="profile-phone"
+                      value={profileForm.phone}
+                      onChange={(e) =>
+                        setProfileForm({ ...profileForm, phone: e.target.value })
+                      }
+                      placeholder="Nhập số điện thoại"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Vai trò</Label>
+                    <Input
+                      defaultValue={user?.role?.display_name || ""}
+                      disabled
+                      className="bg-muted"
+                    />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Email</Label>
-                  <Input value={profileForm.email} type="email" disabled />
-                </div>
-                <div className="space-y-2">
-                  <Label>Số điện thoại</Label>
-                  <Input
-                    value={profileForm.phone}
-                    onChange={(e) =>
-                      setProfileForm({ ...profileForm, phone: e.target.value })
-                    }
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Vai trò</Label>
-                  <Input defaultValue={user?.role?.display_name || ""} disabled />
-                </div>
-              </div>
-              <Separator />
-              <Button onClick={() => toast.info("Chức năng cập nhật hồ sơ sẽ được triển khai")}>
-                <Save className="mr-2 h-4 w-4" />
-                Lưu thay đổi
-              </Button>
+                <Separator />
+                <Button type="submit" disabled={updateProfileMutation.isPending}>
+                  <Save className="mr-2 h-4 w-4" />
+                  {updateProfileMutation.isPending ? "Đang lưu..." : "Lưu thay đổi"}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* Store */}
+        {/* ── Store ───────────────────────────── */}
         <TabsContent value="store">
           <Card>
             <CardHeader>
@@ -280,7 +419,7 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Security */}
+        {/* ── Security ────────────────────────── */}
         <TabsContent value="security">
           <Card>
             <CardHeader>
@@ -333,7 +472,7 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Notifications */}
+        {/* ── Notifications ───────────────────── */}
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
@@ -341,25 +480,20 @@ export default function SettingsPage() {
               <CardDescription>Quản lý cách bạn nhận thông báo</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {[
-                  { title: "Đơn hàng mới", desc: "Nhận thông báo khi có đơn hàng mới" },
-                  { title: "Tồn kho thấp", desc: "Cảnh báo khi sản phẩm sắp hết hàng" },
-                  { title: "Bảo hành hết hạn", desc: "Nhắc nhở khi bảo hành sắp hết hạn" },
-                  { title: "Yêu cầu bảo hành", desc: "Thông báo yêu cầu bảo hành mới" },
-                  { title: "Báo cáo hàng ngày", desc: "Gửi email báo cáo doanh thu cuối ngày" },
-                ].map((item) => (
+              <div className="space-y-1">
+                {notificationItems.map((item) => (
                   <div
-                    key={item.title}
+                    key={item.key}
                     className="flex items-center justify-between py-3 border-b last:border-0"
                   >
-                    <div>
+                    <div className="space-y-0.5 pr-4">
                       <p className="font-medium text-sm">{item.title}</p>
                       <p className="text-xs text-muted-foreground">{item.desc}</p>
                     </div>
-                    <Button variant="outline" size="sm">
-                      Bật
-                    </Button>
+                    <Switch
+                      checked={notifPrefs[item.key]}
+                      onCheckedChange={() => toggleNotif(item.key)}
+                    />
                   </div>
                 ))}
               </div>
@@ -367,38 +501,79 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        {/* Appearance */}
+        {/* ── Appearance ──────────────────────── */}
         <TabsContent value="appearance">
           <Card>
             <CardHeader>
               <CardTitle>Giao diện</CardTitle>
               <CardDescription>Tùy chỉnh giao diện ứng dụng</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label>Chế độ</Label>
-                <Select defaultValue="system">
-                  <SelectTrigger className="w-[200px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="light">Sáng</SelectItem>
-                    <SelectItem value="dark">Tối</SelectItem>
-                    <SelectItem value="system">Theo hệ thống</SelectItem>
-                  </SelectContent>
-                </Select>
+            <CardContent className="space-y-6">
+              {/* Theme selector */}
+              <div className="space-y-3">
+                <Label>Chế độ hiển thị</Label>
+                {mounted && (
+                  <div className="grid grid-cols-3 gap-3 max-w-md">
+                    <button
+                      type="button"
+                      onClick={() => setTheme("light")}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-colors hover:bg-accent",
+                        theme === "light"
+                          ? "border-primary bg-accent"
+                          : "border-muted"
+                      )}
+                    >
+                      <Sun className="h-6 w-6" />
+                      <span className="text-sm font-medium">Sáng</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTheme("dark")}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-colors hover:bg-accent",
+                        theme === "dark"
+                          ? "border-primary bg-accent"
+                          : "border-muted"
+                      )}
+                    >
+                      <Moon className="h-6 w-6" />
+                      <span className="text-sm font-medium">Tối</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTheme("system")}
+                      className={cn(
+                        "flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-colors hover:bg-accent",
+                        theme === "system"
+                          ? "border-primary bg-accent"
+                          : "border-muted"
+                      )}
+                    >
+                      <Monitor className="h-6 w-6" />
+                      <span className="text-sm font-medium">Hệ thống</span>
+                    </button>
+                  </div>
+                )}
               </div>
+
+              <Separator />
+
+              {/* Language */}
               <div className="space-y-2">
                 <Label>Ngôn ngữ</Label>
-                <Select defaultValue="vi">
-                  <SelectTrigger className="w-[200px]">
+                <Select value={language} onValueChange={handleLanguageChange}>
+                  <SelectTrigger className="w-[240px]">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="vi">Tiếng Việt</SelectItem>
-                    <SelectItem value="en">English</SelectItem>
+                    <SelectItem value="vi">🇻🇳 Tiếng Việt</SelectItem>
+                    <SelectItem value="en">🇺🇸 English</SelectItem>
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  Tính năng đa ngôn ngữ sẽ được hỗ trợ trong phiên bản tới
+                </p>
               </div>
             </CardContent>
           </Card>

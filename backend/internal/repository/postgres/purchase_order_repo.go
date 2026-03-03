@@ -148,6 +148,45 @@ func (r *purchaseOrderRepository) List(ctx context.Context, storeID uuid.UUID, p
 	return orders, total, nil
 }
 
+func (r *purchaseOrderRepository) ListBySupplier(ctx context.Context, storeID, supplierID uuid.UUID, page, limit int) ([]model.PurchaseOrder, int64, error) {
+	if page < 1 {
+		page = 1
+	}
+	if limit < 1 {
+		limit = 20
+	}
+
+	var total int64
+	countQ := `SELECT COUNT(*) FROM purchase_orders WHERE store_id = $1 AND supplier_id = $2`
+	if err := r.db.QueryRow(ctx, countQ, storeID, supplierID).Scan(&total); err != nil {
+		return nil, 0, err
+	}
+
+	offset := (page - 1) * limit
+	query := `SELECT id, store_id, supplier_id, user_id, order_number, status, total_amount, notes, expected_date, received_date, created_at, updated_at
+		FROM purchase_orders WHERE store_id = $1 AND supplier_id = $2 ORDER BY created_at DESC LIMIT $3 OFFSET $4`
+
+	rows, err := r.db.Query(ctx, query, storeID, supplierID, limit, offset)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var orders []model.PurchaseOrder
+	for rows.Next() {
+		var po model.PurchaseOrder
+		if err := rows.Scan(
+			&po.ID, &po.StoreID, &po.SupplierID, &po.UserID, &po.OrderNumber,
+			&po.Status, &po.TotalAmount, &po.Notes, &po.ExpectedDate, &po.ReceivedDate,
+			&po.CreatedAt, &po.UpdatedAt,
+		); err != nil {
+			return nil, 0, err
+		}
+		orders = append(orders, po)
+	}
+	return orders, total, nil
+}
+
 func (r *purchaseOrderRepository) Update(ctx context.Context, po *model.PurchaseOrder) error {
 	query := `UPDATE purchase_orders SET status = $2, total_amount = $3, notes = $4, expected_date = $5, received_date = $6, updated_at = $7 WHERE id = $1`
 	_, err := r.db.Exec(ctx, query,

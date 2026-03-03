@@ -9,6 +9,11 @@ import type {
   ChangePasswordRequest,
 } from "@/types/api";
 
+export interface UpdateProfileRequest {
+  full_name?: string;
+  phone?: string;
+}
+
 export const authService = {
   login: async (data: LoginRequest) => {
     const response = await api.post<ApiResponse<LoginResponse>>("/auth/login", data);
@@ -32,6 +37,11 @@ export const authService = {
 
   getProfile: async () => {
     const response = await api.get<ApiResponse<UserResponse>>("/auth/profile");
+    return response.data.data;
+  },
+
+  updateProfile: async (data: UpdateProfileRequest) => {
+    const response = await api.put<ApiResponse<UserResponse>>("/auth/profile", data);
     return response.data.data;
   },
 

@@ -2,10 +2,10 @@ package service
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/zplus/pos/internal/config"
 	"github.com/zplus/pos/internal/dto"
 	"github.com/zplus/pos/internal/repository"
 )
@@ -13,25 +13,46 @@ import (
 type dashboardService struct {
 	orderRepo     repository.OrderRepository
 	inventoryRepo repository.InventoryRepository
+	location      *time.Location
 }
 
 func NewDashboardService(
 	orderRepo repository.OrderRepository,
 	inventoryRepo repository.InventoryRepository,
+	cfg *config.Config,
 ) DashboardService {
+	tz := cfg.App.Timezone
+	if tz == "" {
+		tz = "Asia/Ho_Chi_Minh"
+	}
+	loc, err := time.LoadLocation(tz)
+	if err != nil {
+		loc = time.FixedZone("ICT", 7*3600)
+	}
 	return &dashboardService{
 		orderRepo:     orderRepo,
 		inventoryRepo: inventoryRepo,
+		location:      loc,
 	}
 }
 
+// dayRange returns the start (inclusive) and end (exclusive) of a given date in the configured timezone.
+func (s *dashboardService) dayRange(t time.Time) (time.Time, time.Time) {
+	y, m, d := t.In(s.location).Date()
+	start := time.Date(y, m, d, 0, 0, 0, 0, s.location)
+	end := start.AddDate(0, 0, 1)
+	return start, end
+}
+
 func (s *dashboardService) GetSummary(ctx context.Context, storeID uuid.UUID) (*dto.DashboardSummary, error) {
-	today := time.Now().Format("2006-01-02")
+	now := time.Now().In(s.location)
 
-	todayRevenue, todayOrders, _ := s.orderRepo.GetDailySales(ctx, storeID, today)
+	todayStart, todayEnd := s.dayRange(now)
+	todayRevenue, todayOrders, _ := s.orderRepo.GetDailySales(ctx, storeID, todayStart, todayEnd)
 
-	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	yesterdayRevenue, yesterdayOrders, _ := s.orderRepo.GetDailySales(ctx, storeID, yesterday)
+	yesterday := now.AddDate(0, 0, -1)
+	ydayStart, ydayEnd := s.dayRange(yesterday)
+	yesterdayRevenue, yesterdayOrders, _ := s.orderRepo.GetDailySales(ctx, storeID, ydayStart, ydayEnd)
 
 	lowStockItems, lowStockCount, _ := s.inventoryRepo.GetLowStock(ctx, storeID, 1, 1)
 	_ = lowStockItems
@@ -44,16 +65,9 @@ func (s *dashboardService) GetSummary(ctx context.Context, storeID uuid.UUID) (*
 		orderChange = ((float64(todayOrders) - float64(yesterdayOrders)) / float64(yesterdayOrders)) * 100
 	}
 
-	// Calculate month totals
-	var monthRevenue float64
-	var monthOrders int
-	now := time.Now()
-	for d := 1; d <= now.Day(); d++ {
-		date := fmt.Sprintf("%d-%02d-%02d", now.Year(), now.Month(), d)
-		rev, orders, _ := s.orderRepo.GetDailySales(ctx, storeID, date)
-		monthRevenue += rev
-		monthOrders += orders
-	}
+	// Month totals: from 1st of the month to end of today
+	monthStart := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, s.location)
+	monthRevenue, monthOrders, _ := s.orderRepo.GetDailySales(ctx, storeID, monthStart, todayEnd)
 
 	return &dto.DashboardSummary{
 		TodayRevenue:  todayRevenue,
@@ -74,11 +88,13 @@ func (s *dashboardService) GetSalesChart(ctx context.Context, storeID uuid.UUID,
 		days = 90
 	}
 
+	now := time.Now().In(s.location)
 	var points []dto.SalesChartPoint
 	for i := days - 1; i >= 0; i-- {
-		date := time.Now().AddDate(0, 0, -i)
-		dateStr := date.Format("2006-01-02")
-		rev, orders, _ := s.orderRepo.GetDailySales(ctx, storeID, dateStr)
+		day := now.AddDate(0, 0, -i)
+		start, end := s.dayRange(day)
+		dateStr := day.Format("2006-01-02")
+		rev, orders, _ := s.orderRepo.GetDailySales(ctx, storeID, start, end)
 		points = append(points, dto.SalesChartPoint{
 			Date:    dateStr,
 			Revenue: rev,

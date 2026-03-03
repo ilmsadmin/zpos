@@ -36,6 +36,11 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password" validate:"required,password_strength"`
 }
 
+type UpdateProfileRequest struct {
+	FullName string `json:"full_name" validate:"omitempty,min=2,max=100"`
+	Phone    string `json:"phone" validate:"omitempty,phone_vn"`
+}
+
 // --- User DTOs ---
 
 type UserResponse struct {

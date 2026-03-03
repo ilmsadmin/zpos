@@ -37,7 +37,7 @@ import { useRouter } from "next/navigation";
 
 const navigation = [
   { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Bán hàng (POS)", href: "/dashboard/pos", icon: Monitor },
+  { name: "Bán hàng (POS)", href: "/pos", icon: Monitor },
   { name: "Quản lý ca", href: "/dashboard/pos/sessions", icon: Clock },
   { name: "Đơn hàng", href: "/dashboard/orders", icon: ShoppingCart },
   { name: "Sản phẩm", href: "/dashboard/products", icon: Package },

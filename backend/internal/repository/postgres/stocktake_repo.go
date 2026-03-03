@@ -46,7 +46,7 @@ func (r *stocktakeRepository) GetByID(ctx context.Context, id uuid.UUID) (*model
 	return s, err
 }
 
-func (r *stocktakeRepository) List(ctx context.Context, storeID uuid.UUID, page, limit int) ([]model.Stocktake, int64, error) {
+func (r *stocktakeRepository) List(ctx context.Context, storeID uuid.UUID, page, limit int, status, search string) ([]model.Stocktake, int64, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -54,15 +54,34 @@ func (r *stocktakeRepository) List(ctx context.Context, storeID uuid.UUID, page,
 		limit = 20
 	}
 
+	// Build dynamic WHERE clause
+	where := `WHERE store_id = $1`
+	args := []interface{}{storeID}
+	argIdx := 2
+
+	if status != "" {
+		where += fmt.Sprintf(` AND status = $%d`, argIdx)
+		args = append(args, status)
+		argIdx++
+	}
+	if search != "" {
+		where += fmt.Sprintf(` AND (code ILIKE $%d OR notes ILIKE $%d)`, argIdx, argIdx)
+		args = append(args, "%"+search+"%")
+		argIdx++
+	}
+
 	var total int64
-	if err := r.db.QueryRow(ctx, `SELECT COUNT(*) FROM stocktakes WHERE store_id = $1`, storeID).Scan(&total); err != nil {
+	countQuery := fmt.Sprintf(`SELECT COUNT(*) FROM stocktakes %s`, where)
+	if err := r.db.QueryRow(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	offset := (page - 1) * limit
-	query := `SELECT id, store_id, user_id, code, status, notes, total_items, matched_items, mismatch_items, started_at, completed_at, created_at, updated_at
-		FROM stocktakes WHERE store_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3`
-	rows, err := r.db.Query(ctx, query, storeID, limit, offset)
+	query := fmt.Sprintf(`SELECT id, store_id, user_id, code, status, notes, total_items, matched_items, mismatch_items, started_at, completed_at, created_at, updated_at
+		FROM stocktakes %s ORDER BY created_at DESC LIMIT $%d OFFSET $%d`, where, argIdx, argIdx+1)
+	args = append(args, limit, offset)
+
+	rows, err := r.db.Query(ctx, query, args...)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -126,8 +145,57 @@ func (r *stocktakeRepository) GetItems(ctx context.Context, stocktakeID uuid.UUI
 	return items, nil
 }
 
+func (r *stocktakeRepository) GetItemsWithProductInfo(ctx context.Context, stocktakeID uuid.UUID) ([]repository.StocktakeItemWithProduct, error) {
+	query := `SELECT si.id, si.stocktake_id, si.product_variant_id, si.system_qty, si.counted_qty, si.difference, si.notes, si.counted_at,
+		COALESCE(p.name, '') AS product_name, COALESCE(pv.name, '') AS variant_name, COALESCE(pv.sku, '') AS sku, COALESCE(pv.barcode, '') AS barcode
+		FROM stocktake_items si
+		LEFT JOIN product_variants pv ON pv.id = si.product_variant_id
+		LEFT JOIN products p ON p.id = pv.product_id
+		WHERE si.stocktake_id = $1
+		ORDER BY si.counted_at DESC`
+	rows, err := r.db.Query(ctx, query, stocktakeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var items []repository.StocktakeItemWithProduct
+	for rows.Next() {
+		var item repository.StocktakeItemWithProduct
+		if err := rows.Scan(
+			&item.ID, &item.StocktakeID, &item.ProductVariantID, &item.SystemQty,
+			&item.CountedQty, &item.Difference, &item.Notes, &item.CountedAt,
+			&item.ProductName, &item.VariantName, &item.SKU, &item.Barcode,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	return items, nil
+}
+
+func (r *stocktakeRepository) GetItemByVariant(ctx context.Context, stocktakeID, variantID uuid.UUID) (*model.StocktakeItem, error) {
+	item := &model.StocktakeItem{}
+	query := `SELECT id, stocktake_id, product_variant_id, system_qty, counted_qty, difference, notes, counted_at
+		FROM stocktake_items WHERE stocktake_id = $1 AND product_variant_id = $2`
+	err := r.db.QueryRow(ctx, query, stocktakeID, variantID).Scan(
+		&item.ID, &item.StocktakeID, &item.ProductVariantID, &item.SystemQty,
+		&item.CountedQty, &item.Difference, &item.Notes, &item.CountedAt,
+	)
+	if err == pgx.ErrNoRows {
+		return nil, fmt.Errorf("stocktake item not found")
+	}
+	return item, err
+}
+
 func (r *stocktakeRepository) UpdateItem(ctx context.Context, item *model.StocktakeItem) error {
 	query := `UPDATE stocktake_items SET counted_qty = $2, difference = $3, notes = $4, counted_at = $5 WHERE id = $1`
 	_, err := r.db.Exec(ctx, query, item.ID, item.CountedQty, item.Difference, item.Notes, item.CountedAt)
+	return err
+}
+
+func (r *stocktakeRepository) DeleteItem(ctx context.Context, itemID uuid.UUID) error {
+	query := `DELETE FROM stocktake_items WHERE id = $1`
+	_, err := r.db.Exec(ctx, query, itemID)
 	return err
 }

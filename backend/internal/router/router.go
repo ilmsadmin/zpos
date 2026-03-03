@@ -46,6 +46,7 @@ func Setup(app *fiber.App, h *Handlers, jwtManager *auth.JWTManager, permChecker
 	// Auth routes (authenticated)
 	authProtected := authGroup.Group("", middleware.AuthMiddleware(jwtManager))
 	authProtected.Get("/profile", h.Auth.GetProfile)
+	authProtected.Put("/profile", h.Auth.UpdateProfile)
 	authProtected.Post("/change-password", h.Auth.ChangePassword)
 	authProtected.Post("/logout", h.Auth.Logout)
 
@@ -97,14 +98,13 @@ func Setup(app *fiber.App, h *Handlers, jwtManager *auth.JWTManager, permChecker
 	products.Post("/", middleware.RequirePermission(permChecker, middleware.PermProductCreate), h.Product.Create)
 	products.Get("/search", middleware.RequirePermission(permChecker, middleware.PermProductRead), h.Product.Search)
 	products.Get("/barcode/:barcode", middleware.RequirePermission(permChecker, middleware.PermProductRead), h.Product.GetByBarcode)
-	products.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermProductRead), h.Product.GetByID)
-	products.Put("/:id", middleware.RequirePermission(permChecker, middleware.PermProductUpdate), h.Product.Update)
-	products.Delete("/:id", middleware.RequirePermission(permChecker, middleware.PermProductDelete), h.Product.Delete)
-
-	// Product variant routes
+	// Sub-routes with /:id/... must be registered BEFORE bare /:id
 	products.Post("/:id/variants", middleware.RequirePermission(permChecker, middleware.PermProductCreate), h.Product.CreateVariant)
 	products.Put("/:id/variants/:variantId", middleware.RequirePermission(permChecker, middleware.PermProductUpdate), h.Product.UpdateVariant)
 	products.Delete("/:id/variants/:variantId", middleware.RequirePermission(permChecker, middleware.PermProductDelete), h.Product.DeleteVariant)
+	products.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermProductRead), h.Product.GetByID)
+	products.Put("/:id", middleware.RequirePermission(permChecker, middleware.PermProductUpdate), h.Product.Update)
+	products.Delete("/:id", middleware.RequirePermission(permChecker, middleware.PermProductDelete), h.Product.Delete)
 
 	// Order routes
 	orders := protected.Group("/orders")
@@ -112,25 +112,29 @@ func Setup(app *fiber.App, h *Handlers, jwtManager *auth.JWTManager, permChecker
 	orders.Post("/", middleware.RequireAnyPermission(permChecker, middleware.PermOrderCreate, middleware.PermPOSAccess), h.Order.Create)
 	orders.Get("/daily-summary", middleware.RequirePermission(permChecker, middleware.PermReportRead), h.Order.DailySummary)
 	orders.Get("/customer/:customer_id/items", middleware.RequirePermission(permChecker, middleware.PermOrderRead), h.Order.GetCustomerPurchasedItems)
-	orders.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermOrderRead), h.Order.GetByID)
 	orders.Post("/:id/cancel", middleware.RequirePermission(permChecker, middleware.PermOrderCancel), h.Order.Cancel)
 	orders.Post("/:id/refund", middleware.RequirePermission(permChecker, middleware.PermOrderRefund), h.Order.Refund)
+	orders.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermOrderRead), h.Order.GetByID)
 
 	// Customer routes
 	customers := protected.Group("/customers")
 	customers.Get("/", middleware.RequirePermission(permChecker, middleware.PermCustomerRead), h.Customer.List)
 	customers.Post("/", middleware.RequirePermission(permChecker, middleware.PermCustomerCreate), h.Customer.Create)
 	customers.Get("/search", middleware.RequirePermission(permChecker, middleware.PermCustomerRead), h.Customer.Search)
+	// Sub-routes must be registered BEFORE /:id
+	customers.Get("/:id/orders", middleware.RequirePermission(permChecker, middleware.PermCustomerRead), h.Customer.GetOrders)
+	customers.Get("/:id/warranties", middleware.RequirePermission(permChecker, middleware.PermCustomerRead), h.Customer.GetWarranties)
 	customers.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermCustomerRead), h.Customer.GetByID)
 	customers.Put("/:id", middleware.RequirePermission(permChecker, middleware.PermCustomerUpdate), h.Customer.Update)
 	customers.Delete("/:id", middleware.RequirePermission(permChecker, middleware.PermCustomerDelete), h.Customer.Delete)
-	customers.Get("/:id/orders", middleware.RequirePermission(permChecker, middleware.PermCustomerRead), h.Customer.GetOrders)
-	customers.Get("/:id/warranties", middleware.RequirePermission(permChecker, middleware.PermCustomerRead), h.Customer.GetWarranties)
 
 	// Supplier routes
 	suppliers := protected.Group("/suppliers")
 	suppliers.Get("/", middleware.RequirePermission(permChecker, middleware.PermSupplierRead), h.Supplier.List)
 	suppliers.Post("/", middleware.RequirePermission(permChecker, middleware.PermSupplierCreate), h.Supplier.Create)
+	// Sub-routes must be registered BEFORE /:id to avoid Fiber's greedy param matching
+	suppliers.Get("/:id/purchase-orders", middleware.RequirePermission(permChecker, middleware.PermSupplierRead), h.Supplier.GetPurchaseOrders)
+	suppliers.Get("/:id/debt-summary", middleware.RequirePermission(permChecker, middleware.PermSupplierRead), h.Supplier.GetDebtSummary)
 	suppliers.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermSupplierRead), h.Supplier.GetByID)
 	suppliers.Put("/:id", middleware.RequirePermission(permChecker, middleware.PermSupplierUpdate), h.Supplier.Update)
 	suppliers.Delete("/:id", middleware.RequirePermission(permChecker, middleware.PermSupplierRead), h.Supplier.Delete)
@@ -150,17 +154,17 @@ func Setup(app *fiber.App, h *Handlers, jwtManager *auth.JWTManager, permChecker
 	warranties.Get("/lookup", middleware.RequirePermission(permChecker, middleware.PermWarrantyRead), h.Warranty.Lookup)
 	warranties.Get("/expiring", middleware.RequirePermission(permChecker, middleware.PermWarrantyRead), h.Warranty.GetExpiring)
 	warranties.Get("/claims-count", middleware.RequirePermission(permChecker, middleware.PermWarrantyRead), h.Warranty.CountActiveClaims)
-	warranties.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermWarrantyRead), h.Warranty.GetByID)
-	warranties.Put("/:id", middleware.RequirePermission(permChecker, middleware.PermWarrantyUpdate), h.Warranty.Update)
 	warranties.Post("/:id/void", middleware.RequirePermission(permChecker, middleware.PermWarrantyUpdate), h.Warranty.Void)
 	warranties.Post("/:id/claims", middleware.RequirePermission(permChecker, middleware.PermWarrantyCreate), h.Warranty.CreateClaim)
+	warranties.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermWarrantyRead), h.Warranty.GetByID)
+	warranties.Put("/:id", middleware.RequirePermission(permChecker, middleware.PermWarrantyUpdate), h.Warranty.Update)
 
 	// Warranty claim routes
 	warrantyClaims := protected.Group("/warranty-claims")
-	warrantyClaims.Get("/:claim_id", middleware.RequirePermission(permChecker, middleware.PermWarrantyRead), h.Warranty.GetClaimByID)
-	warrantyClaims.Put("/:claim_id", middleware.RequirePermission(permChecker, middleware.PermWarrantyUpdate), h.Warranty.UpdateClaim)
 	warrantyClaims.Put("/:claim_id/status", middleware.RequirePermission(permChecker, middleware.PermWarrantyUpdate), h.Warranty.UpdateClaimStatus)
 	warrantyClaims.Post("/:claim_id/return", middleware.RequirePermission(permChecker, middleware.PermWarrantyUpdate), h.Warranty.ReturnClaim)
+	warrantyClaims.Get("/:claim_id", middleware.RequirePermission(permChecker, middleware.PermWarrantyRead), h.Warranty.GetClaimByID)
+	warrantyClaims.Put("/:claim_id", middleware.RequirePermission(permChecker, middleware.PermWarrantyUpdate), h.Warranty.UpdateClaim)
 
 	// POS session routes
 	pos := protected.Group("/pos")
@@ -173,16 +177,20 @@ func Setup(app *fiber.App, h *Handlers, jwtManager *auth.JWTManager, permChecker
 	purchaseOrders := protected.Group("/purchase-orders")
 	purchaseOrders.Get("/", middleware.RequirePermission(permChecker, middleware.PermInventoryRead), h.PurchaseOrder.List)
 	purchaseOrders.Post("/", middleware.RequirePermission(permChecker, middleware.PermInventoryImport), h.PurchaseOrder.Create)
-	purchaseOrders.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermInventoryRead), h.PurchaseOrder.GetByID)
-	purchaseOrders.Put("/:id", middleware.RequirePermission(permChecker, middleware.PermInventoryUpdate), h.PurchaseOrder.Update)
 	purchaseOrders.Post("/:id/approve", middleware.RequirePermission(permChecker, middleware.PermInventoryUpdate), h.PurchaseOrder.Approve)
 	purchaseOrders.Post("/:id/receive", middleware.RequirePermission(permChecker, middleware.PermInventoryImport), h.PurchaseOrder.Receive)
+	purchaseOrders.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermInventoryRead), h.PurchaseOrder.GetByID)
+	purchaseOrders.Put("/:id", middleware.RequirePermission(permChecker, middleware.PermInventoryUpdate), h.PurchaseOrder.Update)
 
 	// Stocktake routes
 	stocktakes := protected.Group("/stocktakes")
 	stocktakes.Get("/", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.List)
 	stocktakes.Post("/", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.Create)
-	stocktakes.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.GetByID)
 	stocktakes.Post("/:id/count", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.AddItem)
+	stocktakes.Post("/:id/barcode", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.AddItemByBarcode)
+	stocktakes.Put("/:id/items/:itemId", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.UpdateItem)
+	stocktakes.Delete("/:id/items/:itemId", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.DeleteItem)
 	stocktakes.Post("/:id/complete", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.Complete)
+	stocktakes.Post("/:id/cancel", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.Cancel)
+	stocktakes.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.GetByID)
 }

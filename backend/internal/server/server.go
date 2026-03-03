@@ -117,12 +117,12 @@ func (s *Server) Initialize() error {
 	inventorySvc := service.NewInventoryService(inventoryRepo, variantRepo)
 	orderSvc := service.NewOrderService(orderRepo, inventoryRepo, variantRepo, customerRepo, productRepo, posSessionRepo)
 	customerSvc := service.NewCustomerService(customerRepo, orderRepo, warrantyRepo)
-	supplierSvc := service.NewSupplierService(supplierRepo)
+	supplierSvc := service.NewSupplierService(supplierRepo, purchaseOrderRepo, variantRepo, productRepo)
 	warrantySvc := service.NewWarrantyService(warrantyRepo)
 	posSessionSvc := service.NewPOSSessionService(posSessionRepo, orderRepo, userRepo)
 	purchaseOrderSvc := service.NewPurchaseOrderService(purchaseOrderRepo, supplierRepo, inventoryRepo, variantRepo, productRepo)
 	stocktakeSvc := service.NewStocktakeService(stocktakeRepo, inventoryRepo, variantRepo)
-	dashboardSvc := service.NewDashboardService(orderRepo, inventoryRepo)
+	dashboardSvc := service.NewDashboardService(orderRepo, inventoryRepo, s.config)
 
 	// Initialize handlers
 	handlers := &router.Handlers{

@@ -2,6 +2,7 @@ import api from "@/lib/api";
 import type {
   ApiResponse,
   PaginatedResponse,
+  PurchaseOrderResponse,
 } from "@/types/api";
 
 export interface SupplierResponse {
@@ -13,8 +14,22 @@ export interface SupplierResponse {
   email: string;
   address: string;
   tax_code: string;
+  bank_account: string;
+  bank_name: string;
+  notes: string;
   is_active: boolean;
   created_at: string;
+}
+
+export interface SupplierDebtSummary {
+  total_orders: number;
+  total_amount: number;
+  received_amount: number;
+  pending_amount: number;
+  draft_orders: number;
+  confirmed_orders: number;
+  received_orders: number;
+  cancelled_orders: number;
 }
 
 export interface CreateSupplierRequest {
@@ -70,5 +85,20 @@ export const supplierService = {
 
   delete: async (id: string) => {
     await api.delete(`/suppliers/${id}`);
+  },
+
+  getPurchaseOrders: async (id: string, params?: Record<string, string | number | boolean>) => {
+    const response = await api.get<PaginatedResponse<PurchaseOrderResponse>>(
+      `/suppliers/${id}/purchase-orders`,
+      { params }
+    );
+    return response.data;
+  },
+
+  getDebtSummary: async (id: string) => {
+    const response = await api.get<ApiResponse<SupplierDebtSummary>>(
+      `/suppliers/${id}/debt-summary`
+    );
+    return response.data.data;
   },
 };

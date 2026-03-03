@@ -145,13 +145,42 @@ func (h *AuthHandler) GetProfile(c *fiber.Ctx) error {
 		return response.Error(c, appErrors.Unauthorized(""))
 	}
 
-	// Use a simple user service lookup here; for now, return claims as profile
-	return response.Success(c, fiber.Map{
-		"user_id":   claims.UserID,
-		"store_id":  claims.StoreID,
-		"role_id":   claims.RoleID,
-		"role_name": claims.RoleName,
-	})
+	result, err := h.authService.GetProfile(c.Context(), claims.UserID)
+	if err != nil {
+		return response.ErrorFromErr(c, err)
+	}
+	return response.Success(c, result)
+}
+
+// UpdateProfile godoc
+// @Summary Update current user profile
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param body body dto.UpdateProfileRequest true "Profile data"
+// @Success 200 {object} dto.UserResponse
+// @Security BearerAuth
+// @Router /api/v1/auth/profile [put]
+func (h *AuthHandler) UpdateProfile(c *fiber.Ctx) error {
+	claims := middleware.GetClaims(c)
+	if claims == nil {
+		return response.Error(c, appErrors.Unauthorized(""))
+	}
+
+	var req dto.UpdateProfileRequest
+	if err := c.BodyParser(&req); err != nil {
+		return response.Error(c, appErrors.BadRequest("Invalid request body"))
+	}
+
+	if err := h.validate.Validate(&req); err != nil {
+		return response.ErrorFromErr(c, err)
+	}
+
+	result, err := h.authService.UpdateProfile(c.Context(), claims.UserID, &req)
+	if err != nil {
+		return response.ErrorFromErr(c, err)
+	}
+	return response.Success(c, result)
 }
 
 // Logout godoc

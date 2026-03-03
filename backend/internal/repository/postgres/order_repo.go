@@ -256,12 +256,15 @@ func (r *orderRepository) Update(ctx context.Context, o *model.Order) error {
 	return err
 }
 
-func (r *orderRepository) GetDailySales(ctx context.Context, storeID uuid.UUID, date string) (float64, int, error) {
+func (r *orderRepository) GetDailySales(ctx context.Context, storeID uuid.UUID, start, end time.Time) (float64, int, error) {
 	var totalAmount float64
 	var totalOrders int
 	query := `SELECT COALESCE(SUM(total_amount), 0), COUNT(*) FROM orders 
-		WHERE store_id = $1 AND DATE(created_at) = $2 AND status IN ('completed', 'confirmed')`
-	err := r.db.QueryRow(ctx, query, storeID, date).Scan(&totalAmount, &totalOrders)
+		WHERE store_id = $1 
+		AND created_at >= $2 
+		AND created_at < $3
+		AND status IN ('completed', 'confirmed')`
+	err := r.db.QueryRow(ctx, query, storeID, start, end).Scan(&totalAmount, &totalOrders)
 	if err != nil {
 		return 0, 0, err
 	}

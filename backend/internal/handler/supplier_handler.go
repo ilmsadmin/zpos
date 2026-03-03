@@ -142,3 +142,52 @@ func (h *SupplierHandler) Delete(c *fiber.Ctx) error {
 	}
 	return response.NoContent(c)
 }
+
+// GetPurchaseOrders godoc
+// @Summary Get purchase orders for a supplier
+// @Tags Suppliers
+// @Produce json
+// @Param id path string true "Supplier ID"
+// @Param page query int false "Page number"
+// @Param limit query int false "Page size"
+// @Success 200 {array} dto.PurchaseOrderResponse
+// @Security BearerAuth
+// @Router /api/v1/suppliers/{id}/purchase-orders [get]
+func (h *SupplierHandler) GetPurchaseOrders(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, appErrors.BadRequest("Invalid supplier ID"))
+	}
+
+	page := c.QueryInt("page", 1)
+	limit := c.QueryInt("limit", 20)
+	storeID := middleware.GetStoreID(c)
+
+	results, total, err := h.supplierService.GetPurchaseOrders(c.Context(), storeID, id, page, limit)
+	if err != nil {
+		return response.ErrorFromErr(c, err)
+	}
+	return response.Paginated(c, results, page, limit, total)
+}
+
+// GetDebtSummary godoc
+// @Summary Get debt summary for a supplier
+// @Tags Suppliers
+// @Produce json
+// @Param id path string true "Supplier ID"
+// @Success 200 {object} dto.SupplierDebtSummary
+// @Security BearerAuth
+// @Router /api/v1/suppliers/{id}/debt-summary [get]
+func (h *SupplierHandler) GetDebtSummary(c *fiber.Ctx) error {
+	id, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return response.Error(c, appErrors.BadRequest("Invalid supplier ID"))
+	}
+
+	storeID := middleware.GetStoreID(c)
+	summary, err := h.supplierService.GetDebtSummary(c.Context(), storeID, id)
+	if err != nil {
+		return response.ErrorFromErr(c, err)
+	}
+	return response.Success(c, summary)
+}

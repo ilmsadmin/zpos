@@ -57,31 +57,37 @@ func (s *stocktakeService) GetByID(ctx context.Context, id uuid.UUID) (*dto.Stoc
 		return nil, appErrors.NotFound("Stocktake")
 	}
 
-	items, err := s.stocktakeRepo.GetItems(ctx, id)
+	itemsWithProduct, err := s.stocktakeRepo.GetItemsWithProductInfo(ctx, id)
 	if err != nil {
 		return nil, appErrors.Internal(err)
 	}
-	st.Items = items
 
-	return s.toStocktakeResponse(st), nil
+	return s.toStocktakeResponseWithProducts(st, itemsWithProduct), nil
 }
 
-func (s *stocktakeService) List(ctx context.Context, storeID uuid.UUID, page, limit int) ([]dto.StocktakeResponse, int64, error) {
-	if page < 1 {
-		page = 1
+func (s *stocktakeService) List(ctx context.Context, storeID uuid.UUID, params *dto.StocktakeListParams) ([]dto.StocktakeResponse, int64, error) {
+	if params.Page < 1 {
+		params.Page = 1
 	}
-	if limit < 1 || limit > 100 {
-		limit = 20
+	if params.Limit < 1 || params.Limit > 100 {
+		params.Limit = 20
 	}
 
-	stocktakes, total, err := s.stocktakeRepo.List(ctx, storeID, page, limit)
+	stocktakes, total, err := s.stocktakeRepo.List(ctx, storeID, params.Page, params.Limit, params.Status, params.Search)
 	if err != nil {
 		return nil, 0, appErrors.Internal(err)
 	}
 
 	results := make([]dto.StocktakeResponse, len(stocktakes))
 	for i, st := range stocktakes {
-		results[i] = *s.toStocktakeResponse(&st)
+		// For list, load items with product info
+		itemsWithProduct, err := s.stocktakeRepo.GetItemsWithProductInfo(ctx, st.ID)
+		if err != nil {
+			// Fallback: return without items
+			results[i] = *s.toStocktakeResponseWithProducts(&st, nil)
+			continue
+		}
+		results[i] = *s.toStocktakeResponseWithProducts(&st, itemsWithProduct)
 	}
 	return results, total, nil
 }
@@ -94,6 +100,22 @@ func (s *stocktakeService) AddItem(ctx context.Context, stocktakeID uuid.UUID, r
 
 	if st.Status != "draft" && st.Status != "in_progress" {
 		return nil, appErrors.BadRequest("Stocktake is not in progress")
+	}
+
+	// Check if variant already exists in this stocktake
+	existingItem, err := s.stocktakeRepo.GetItemByVariant(ctx, stocktakeID, req.ProductVariantID)
+	if err == nil && existingItem != nil {
+		// Update existing item instead of creating duplicate
+		existingItem.CountedQty = req.CountedQty
+		existingItem.Difference = req.CountedQty - existingItem.SystemQty
+		if req.Notes != "" {
+			existingItem.Notes = req.Notes
+		}
+		existingItem.CountedAt = time.Now()
+		if err := s.stocktakeRepo.UpdateItem(ctx, existingItem); err != nil {
+			return nil, appErrors.Internal(err)
+		}
+		return s.getItemResponseWithProduct(ctx, stocktakeID, existingItem.ID)
 	}
 
 	// Update status to in_progress if draft
@@ -128,15 +150,101 @@ func (s *stocktakeService) AddItem(ctx context.Context, stocktakeID uuid.UUID, r
 		return nil, appErrors.Internal(err)
 	}
 
-	return &dto.StocktakeItemResponse{
-		ID:               item.ID,
-		ProductVariantID: item.ProductVariantID,
-		SystemQty:        item.SystemQty,
-		CountedQty:       item.CountedQty,
-		Difference:       item.Difference,
-		Notes:            item.Notes,
-		CountedAt:        item.CountedAt,
-	}, nil
+	return s.getItemResponseWithProduct(ctx, stocktakeID, item.ID)
+}
+
+func (s *stocktakeService) AddItemByBarcode(ctx context.Context, stocktakeID uuid.UUID, barcode string, countedQty int) (*dto.StocktakeItemResponse, error) {
+	variant, err := s.variantRepo.GetByBarcode(ctx, barcode)
+	if err != nil {
+		return nil, appErrors.NotFound("Sản phẩm không tìm thấy với barcode: " + barcode)
+	}
+
+	req := &dto.AddStocktakeItemRequest{
+		ProductVariantID: variant.ID,
+		CountedQty:       countedQty,
+	}
+	return s.AddItem(ctx, stocktakeID, req)
+}
+
+func (s *stocktakeService) UpdateItem(ctx context.Context, stocktakeID, itemID uuid.UUID, req *dto.UpdateStocktakeItemRequest) (*dto.StocktakeItemResponse, error) {
+	st, err := s.stocktakeRepo.GetByID(ctx, stocktakeID)
+	if err != nil {
+		return nil, appErrors.NotFound("Stocktake")
+	}
+
+	if st.Status != "draft" && st.Status != "in_progress" {
+		return nil, appErrors.BadRequest("Cannot update items of a completed/cancelled stocktake")
+	}
+
+	// Get existing items to find the one to update
+	items, err := s.stocktakeRepo.GetItems(ctx, stocktakeID)
+	if err != nil {
+		return nil, appErrors.Internal(err)
+	}
+
+	var targetIdx = -1
+	for i := range items {
+		if items[i].ID == itemID {
+			targetIdx = i
+			break
+		}
+	}
+	if targetIdx == -1 {
+		return nil, appErrors.NotFound("Stocktake item")
+	}
+
+	items[targetIdx].CountedQty = req.CountedQty
+	items[targetIdx].Difference = req.CountedQty - items[targetIdx].SystemQty
+	items[targetIdx].Notes = req.Notes
+	items[targetIdx].CountedAt = time.Now()
+
+	if err := s.stocktakeRepo.UpdateItem(ctx, &items[targetIdx]); err != nil {
+		return nil, appErrors.Internal(err)
+	}
+
+	return s.getItemResponseWithProduct(ctx, stocktakeID, itemID)
+}
+
+func (s *stocktakeService) DeleteItem(ctx context.Context, stocktakeID, itemID uuid.UUID) error {
+	st, err := s.stocktakeRepo.GetByID(ctx, stocktakeID)
+	if err != nil {
+		return appErrors.NotFound("Stocktake")
+	}
+
+	if st.Status != "draft" && st.Status != "in_progress" {
+		return appErrors.BadRequest("Cannot delete items of a completed/cancelled stocktake")
+	}
+
+	if err := s.stocktakeRepo.DeleteItem(ctx, itemID); err != nil {
+		return appErrors.Internal(err)
+	}
+
+	return nil
+}
+
+func (s *stocktakeService) Cancel(ctx context.Context, id uuid.UUID) (*dto.StocktakeResponse, error) {
+	st, err := s.stocktakeRepo.GetByID(ctx, id)
+	if err != nil {
+		return nil, appErrors.NotFound("Stocktake")
+	}
+
+	if st.Status == "completed" {
+		return nil, appErrors.BadRequest("Cannot cancel a completed stocktake")
+	}
+
+	if st.Status == "cancelled" {
+		return nil, appErrors.BadRequest("Stocktake is already cancelled")
+	}
+
+	now := time.Now()
+	st.Status = "cancelled"
+	st.UpdatedAt = now
+
+	if err := s.stocktakeRepo.Update(ctx, st); err != nil {
+		return nil, appErrors.Internal(err)
+	}
+
+	return s.GetByID(ctx, id)
 }
 
 func (s *stocktakeService) Complete(ctx context.Context, id uuid.UUID) (*dto.StocktakeResponse, error) {
@@ -152,6 +260,10 @@ func (s *stocktakeService) Complete(ctx context.Context, id uuid.UUID) (*dto.Sto
 	items, err := s.stocktakeRepo.GetItems(ctx, id)
 	if err != nil {
 		return nil, appErrors.Internal(err)
+	}
+
+	if len(items) == 0 {
+		return nil, appErrors.BadRequest("Cannot complete a stocktake with no items")
 	}
 
 	now := time.Now()
@@ -220,27 +332,57 @@ func (s *stocktakeService) Complete(ctx context.Context, id uuid.UUID) (*dto.Sto
 	return s.GetByID(ctx, id)
 }
 
-func (s *stocktakeService) toStocktakeResponse(st *model.Stocktake) *dto.StocktakeResponse {
+func (s *stocktakeService) getItemResponseWithProduct(ctx context.Context, stocktakeID, itemID uuid.UUID) (*dto.StocktakeItemResponse, error) {
+	itemsWithProduct, err := s.stocktakeRepo.GetItemsWithProductInfo(ctx, stocktakeID)
+	if err != nil {
+		return nil, appErrors.Internal(err)
+	}
+	for _, item := range itemsWithProduct {
+		if item.ID == itemID {
+			return &dto.StocktakeItemResponse{
+				ID:               item.ID,
+				ProductVariantID: item.ProductVariantID,
+				ProductName:      item.ProductName,
+				VariantName:      item.VariantName,
+				SKU:              item.SKU,
+				Barcode:          item.Barcode,
+				SystemQty:        item.SystemQty,
+				CountedQty:       item.CountedQty,
+				Difference:       item.Difference,
+				Notes:            item.Notes,
+				CountedAt:        item.CountedAt,
+			}, nil
+		}
+	}
+	return nil, appErrors.NotFound("Stocktake item")
+}
+
+func (s *stocktakeService) toStocktakeResponseWithProducts(st *model.Stocktake, itemsWithProduct []repository.StocktakeItemWithProduct) *dto.StocktakeResponse {
 	resp := &dto.StocktakeResponse{
-		ID:            st.ID,
-		StoreID:       st.StoreID,
-		UserID:        st.UserID,
-		Code:          st.Code,
-		Status:        st.Status,
-		Notes:         st.Notes,
-		TotalItems:    st.TotalItems,
-		MatchedItems:  st.MatchedItems,
-		MismatchItems: st.MismatchItems,
-		StartedAt:     st.StartedAt,
-		CompletedAt:   st.CompletedAt,
-		CreatedAt:     st.CreatedAt,
-		UpdatedAt:     st.UpdatedAt,
+		ID:              st.ID,
+		StoreID:         st.StoreID,
+		UserID:          st.UserID,
+		Code:            st.Code,
+		StocktakeNumber: st.Code,
+		Status:          st.Status,
+		Notes:           st.Notes,
+		TotalItems:      st.TotalItems,
+		MatchedItems:    st.MatchedItems,
+		MismatchItems:   st.MismatchItems,
+		StartedAt:       st.StartedAt,
+		CompletedAt:     st.CompletedAt,
+		CreatedAt:       st.CreatedAt,
+		UpdatedAt:       st.UpdatedAt,
 	}
 
-	for _, item := range st.Items {
+	for _, item := range itemsWithProduct {
 		resp.Items = append(resp.Items, dto.StocktakeItemResponse{
 			ID:               item.ID,
 			ProductVariantID: item.ProductVariantID,
+			ProductName:      item.ProductName,
+			VariantName:      item.VariantName,
+			SKU:              item.SKU,
+			Barcode:          item.Barcode,
 			SystemQty:        item.SystemQty,
 			CountedQty:       item.CountedQty,
 			Difference:       item.Difference,

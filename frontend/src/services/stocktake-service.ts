@@ -6,6 +6,8 @@ import type {
   StocktakeItemResponse,
   CreateStocktakeRequest,
   AddStocktakeItemRequest,
+  UpdateStocktakeItemRequest,
+  AddStocktakeItemByBarcodeRequest,
 } from "@/types/api";
 
 export const stocktakeService = {
@@ -40,9 +42,36 @@ export const stocktakeService = {
     return response.data.data;
   },
 
+  addItemByBarcode: async (id: string, data: AddStocktakeItemByBarcodeRequest) => {
+    const response = await api.post<ApiResponse<StocktakeItemResponse>>(
+      `/stocktakes/${id}/barcode`,
+      data
+    );
+    return response.data.data;
+  },
+
+  updateItem: async (stocktakeId: string, itemId: string, data: UpdateStocktakeItemRequest) => {
+    const response = await api.put<ApiResponse<StocktakeItemResponse>>(
+      `/stocktakes/${stocktakeId}/items/${itemId}`,
+      data
+    );
+    return response.data.data;
+  },
+
+  deleteItem: async (stocktakeId: string, itemId: string) => {
+    await api.delete(`/stocktakes/${stocktakeId}/items/${itemId}`);
+  },
+
   complete: async (id: string) => {
     const response = await api.post<ApiResponse<StocktakeResponse>>(
       `/stocktakes/${id}/complete`
+    );
+    return response.data.data;
+  },
+
+  cancel: async (id: string) => {
+    const response = await api.post<ApiResponse<StocktakeResponse>>(
+      `/stocktakes/${id}/cancel`
     );
     return response.data.data;
   },

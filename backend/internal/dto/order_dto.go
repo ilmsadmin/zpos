@@ -256,8 +256,22 @@ type SupplierResponse struct {
 	Email       string    `json:"email"`
 	Address     string    `json:"address"`
 	TaxCode     string    `json:"tax_code"`
+	BankAccount string    `json:"bank_account"`
+	BankName    string    `json:"bank_name"`
+	Notes       string    `json:"notes"`
 	IsActive    bool      `json:"is_active"`
 	CreatedAt   time.Time `json:"created_at"`
+}
+
+type SupplierDebtSummary struct {
+	TotalOrders     int64   `json:"total_orders"`
+	TotalAmount     float64 `json:"total_amount"`
+	ReceivedAmount  float64 `json:"received_amount"`
+	PendingAmount   float64 `json:"pending_amount"`
+	DraftOrders     int64   `json:"draft_orders"`
+	ConfirmedOrders int64   `json:"confirmed_orders"`
+	ReceivedOrders  int64   `json:"received_orders"`
+	CancelledOrders int64   `json:"cancelled_orders"`
 }
 
 type CreateSupplierRequest struct {
@@ -379,25 +393,31 @@ type ReceivePurchaseOrderItemRequest struct {
 // --- Stocktake DTOs ---
 
 type StocktakeResponse struct {
-	ID            uuid.UUID               `json:"id"`
-	StoreID       uuid.UUID               `json:"store_id"`
-	UserID        uuid.UUID               `json:"user_id"`
-	Code          string                  `json:"code"`
-	Status        string                  `json:"status"`
-	Notes         string                  `json:"notes"`
-	TotalItems    int                     `json:"total_items"`
-	MatchedItems  int                     `json:"matched_items"`
-	MismatchItems int                     `json:"mismatch_items"`
-	StartedAt     *time.Time              `json:"started_at"`
-	CompletedAt   *time.Time              `json:"completed_at"`
-	Items         []StocktakeItemResponse `json:"items,omitempty"`
-	CreatedAt     time.Time               `json:"created_at"`
-	UpdatedAt     time.Time               `json:"updated_at"`
+	ID              uuid.UUID               `json:"id"`
+	StoreID         uuid.UUID               `json:"store_id"`
+	UserID          uuid.UUID               `json:"user_id"`
+	Code            string                  `json:"code"`
+	StocktakeNumber string                  `json:"stocktake_number"`
+	Status          string                  `json:"status"`
+	Notes           string                  `json:"notes"`
+	TotalItems      int                     `json:"total_items"`
+	MatchedItems    int                     `json:"matched_items"`
+	MismatchItems   int                     `json:"mismatch_items"`
+	StartedAt       *time.Time              `json:"started_at"`
+	CompletedAt     *time.Time              `json:"completed_at"`
+	CreatedBy       string                  `json:"created_by"`
+	Items           []StocktakeItemResponse `json:"items,omitempty"`
+	CreatedAt       time.Time               `json:"created_at"`
+	UpdatedAt       time.Time               `json:"updated_at"`
 }
 
 type StocktakeItemResponse struct {
 	ID               uuid.UUID `json:"id"`
 	ProductVariantID uuid.UUID `json:"product_variant_id"`
+	ProductName      string    `json:"product_name"`
+	VariantName      string    `json:"variant_name"`
+	SKU              string    `json:"sku"`
+	Barcode          string    `json:"barcode"`
 	SystemQty        int       `json:"system_qty"`
 	CountedQty       int       `json:"counted_qty"`
 	Difference       int       `json:"difference"`
@@ -411,6 +431,18 @@ type CreateStocktakeRequest struct {
 
 type AddStocktakeItemRequest struct {
 	ProductVariantID uuid.UUID `json:"product_variant_id" validate:"required,uuid"`
-	CountedQty       int       `json:"counted_qty" validate:"required,gte=0"`
+	CountedQty       int       `json:"counted_qty" validate:"gte=0"`
 	Notes            string    `json:"notes"`
+}
+
+type UpdateStocktakeItemRequest struct {
+	CountedQty int    `json:"counted_qty" validate:"gte=0"`
+	Notes      string `json:"notes"`
+}
+
+type StocktakeListParams struct {
+	Page   int    `json:"page"`
+	Limit  int    `json:"limit"`
+	Status string `json:"status"`
+	Search string `json:"search"`
 }

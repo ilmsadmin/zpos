@@ -127,6 +127,11 @@ type Inventory struct {
 	MaxStockLevel    *int      `json:"max_stock_level" db:"max_stock_level"`
 	Location         string    `json:"location" db:"location"`
 	UpdatedAt        time.Time `json:"updated_at" db:"updated_at"`
+
+	// Joined fields (not stored in inventory table)
+	ProductName string `json:"product_name" db:"-"`
+	VariantName string `json:"variant_name" db:"-"`
+	SKU         string `json:"sku" db:"-"`
 }
 
 // AvailableQty returns the available quantity (total - reserved)

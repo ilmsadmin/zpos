@@ -59,9 +59,14 @@ func (r *inventoryRepository) GetLowStock(ctx context.Context, storeID uuid.UUID
 	}
 
 	offset := (page - 1) * limit
-	query := `SELECT id, store_id, product_variant_id, quantity, reserved_qty, min_stock_level, max_stock_level, location, updated_at
-		FROM inventory WHERE store_id = $1 AND (quantity - reserved_qty) <= min_stock_level
-		ORDER BY (quantity - reserved_qty - min_stock_level) ASC LIMIT $2 OFFSET $3`
+	query := `SELECT i.id, i.store_id, i.product_variant_id, i.quantity, i.reserved_qty, 
+		i.min_stock_level, i.max_stock_level, i.location, i.updated_at,
+		COALESCE(p.name, '') AS product_name, COALESCE(pv.name, '') AS variant_name, COALESCE(pv.sku, '') AS sku
+		FROM inventory i
+		LEFT JOIN product_variants pv ON pv.id = i.product_variant_id
+		LEFT JOIN products p ON p.id = pv.product_id
+		WHERE i.store_id = $1 AND (i.quantity - i.reserved_qty) <= i.min_stock_level
+		ORDER BY (i.quantity - i.reserved_qty - i.min_stock_level) ASC LIMIT $2 OFFSET $3`
 	rows, err := r.db.Query(ctx, query, storeID, limit, offset)
 	if err != nil {
 		return nil, 0, err
@@ -74,6 +79,7 @@ func (r *inventoryRepository) GetLowStock(ctx context.Context, storeID uuid.UUID
 		if err := rows.Scan(
 			&inv.ID, &inv.StoreID, &inv.ProductVariantID, &inv.Quantity, &inv.ReservedQty,
 			&inv.MinStockLevel, &inv.MaxStockLevel, &inv.Location, &inv.UpdatedAt,
+			&inv.ProductName, &inv.VariantName, &inv.SKU,
 		); err != nil {
 			return nil, 0, err
 		}

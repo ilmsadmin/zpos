@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/zplus/pos/internal/dto"
@@ -108,7 +109,7 @@ type OrderRepository interface {
 	List(ctx context.Context, storeID uuid.UUID, params OrderListParams) ([]model.Order, int64, error)
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 	Update(ctx context.Context, order *model.Order) error
-	GetDailySales(ctx context.Context, storeID uuid.UUID, date string) (float64, int, error)
+	GetDailySales(ctx context.Context, storeID uuid.UUID, start, end time.Time) (float64, int, error)
 	GetCustomerPurchasedItems(ctx context.Context, storeID, customerID uuid.UUID) ([]dto.CustomerPurchasedItemResponse, error)
 }
 
@@ -198,11 +199,23 @@ type POSSessionRepository interface {
 type StocktakeRepository interface {
 	Create(ctx context.Context, stocktake *model.Stocktake) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.Stocktake, error)
-	List(ctx context.Context, storeID uuid.UUID, page, limit int) ([]model.Stocktake, int64, error)
+	List(ctx context.Context, storeID uuid.UUID, page, limit int, status, search string) ([]model.Stocktake, int64, error)
 	Update(ctx context.Context, stocktake *model.Stocktake) error
 	AddItem(ctx context.Context, item *model.StocktakeItem) error
 	GetItems(ctx context.Context, stocktakeID uuid.UUID) ([]model.StocktakeItem, error)
+	GetItemsWithProductInfo(ctx context.Context, stocktakeID uuid.UUID) ([]StocktakeItemWithProduct, error)
+	GetItemByVariant(ctx context.Context, stocktakeID, variantID uuid.UUID) (*model.StocktakeItem, error)
 	UpdateItem(ctx context.Context, item *model.StocktakeItem) error
+	DeleteItem(ctx context.Context, itemID uuid.UUID) error
+}
+
+// StocktakeItemWithProduct holds item data + joined product info
+type StocktakeItemWithProduct struct {
+	model.StocktakeItem
+	ProductName string
+	VariantName string
+	SKU         string
+	Barcode     string
 }
 
 // PurchaseOrderRepository defines the interface for purchase order data access
@@ -210,6 +223,7 @@ type PurchaseOrderRepository interface {
 	Create(ctx context.Context, po *model.PurchaseOrder) error
 	GetByID(ctx context.Context, id uuid.UUID) (*model.PurchaseOrder, error)
 	List(ctx context.Context, storeID uuid.UUID, page, limit int, status string) ([]model.PurchaseOrder, int64, error)
+	ListBySupplier(ctx context.Context, storeID, supplierID uuid.UUID, page, limit int) ([]model.PurchaseOrder, int64, error)
 	Update(ctx context.Context, po *model.PurchaseOrder) error
 	UpdateStatus(ctx context.Context, id uuid.UUID, status string) error
 }

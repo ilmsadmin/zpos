@@ -24,6 +24,7 @@ type AppConfig struct {
 	Env          string `mapstructure:"env"`
 	Port         int    `mapstructure:"port"`
 	AllowOrigins string `mapstructure:"allow_origins"`
+	Timezone     string `mapstructure:"timezone"`
 }
 
 type PostgresConfig struct {

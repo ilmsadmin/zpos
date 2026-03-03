@@ -141,6 +141,9 @@ type InventoryResponse struct {
 	ID               uuid.UUID `json:"id"`
 	StoreID          uuid.UUID `json:"store_id"`
 	ProductVariantID uuid.UUID `json:"product_variant_id"`
+	ProductName      string    `json:"product_name"`
+	VariantName      string    `json:"variant_name"`
+	SKU              string    `json:"sku"`
 	Quantity         int       `json:"quantity"`
 	ReservedQty      int       `json:"reserved_qty"`
 	AvailableQty     int       `json:"available_qty"`

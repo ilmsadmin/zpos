@@ -190,6 +190,9 @@ export interface InventoryResponse {
   id: string;
   store_id: string;
   product_variant_id: string;
+  product_name: string;
+  variant_name: string;
+  sku: string;
   quantity: number;
   reserved_qty: number;
   available_qty: number;
@@ -408,6 +411,9 @@ export interface SupplierResponse {
   email: string;
   address: string;
   tax_code: string;
+  bank_account: string;
+  bank_name: string;
+  notes: string;
   is_active: boolean;
   created_at: string;
 }
@@ -522,13 +528,19 @@ export interface ReceivePurchaseOrderItemRequest {
 export interface StocktakeResponse {
   id: string;
   store_id: string;
+  user_id: string;
+  code: string;
   stocktake_number: string;
   status: string;
   notes: string;
-  items: StocktakeItemResponse[];
-  created_by: string;
-  created_at: string;
+  total_items: number;
+  matched_items: number;
+  mismatch_items: number;
+  started_at: string | null;
   completed_at: string | null;
+  items: StocktakeItemResponse[];
+  created_at: string;
+  updated_at: string;
 }
 
 export interface StocktakeItemResponse {
@@ -537,9 +549,12 @@ export interface StocktakeItemResponse {
   product_name: string;
   variant_name: string;
   sku: string;
+  barcode: string;
   system_qty: number;
   counted_qty: number;
   difference: number;
+  notes: string;
+  counted_at: string;
 }
 
 export interface CreateStocktakeRequest {
@@ -548,6 +563,17 @@ export interface CreateStocktakeRequest {
 
 export interface AddStocktakeItemRequest {
   product_variant_id: string;
+  counted_qty: number;
+  notes?: string;
+}
+
+export interface UpdateStocktakeItemRequest {
+  counted_qty: number;
+  notes?: string;
+}
+
+export interface AddStocktakeItemByBarcodeRequest {
+  barcode: string;
   counted_qty: number;
 }
 

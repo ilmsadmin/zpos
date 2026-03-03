@@ -183,6 +183,40 @@ func (s *authService) Logout(ctx context.Context, userID uuid.UUID) error {
 	return nil
 }
 
+func (s *authService) GetProfile(ctx context.Context, userID uuid.UUID) (*dto.UserResponse, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, appErrors.NotFound("User")
+	}
+
+	role, _ := s.roleRepo.GetByID(ctx, user.RoleID)
+	resp := toUserResponse(user, role)
+	return &resp, nil
+}
+
+func (s *authService) UpdateProfile(ctx context.Context, userID uuid.UUID, req *dto.UpdateProfileRequest) (*dto.UserResponse, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, appErrors.NotFound("User")
+	}
+
+	if req.FullName != "" {
+		user.FullName = req.FullName
+	}
+	if req.Phone != "" {
+		user.Phone = req.Phone
+	}
+	user.UpdatedAt = time.Now()
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, appErrors.Internal(fmt.Errorf("failed to update profile: %w", err))
+	}
+
+	role, _ := s.roleRepo.GetByID(ctx, user.RoleID)
+	resp := toUserResponse(user, role)
+	return &resp, nil
+}
+
 // Helper function to convert model to DTO
 func toUserResponse(user *model.User, role *model.Role) dto.UserResponse {
 	resp := dto.UserResponse{

@@ -333,7 +333,16 @@ func (s *orderService) GetDailySummary(ctx context.Context, storeID uuid.UUID, d
 		date = time.Now().Format("2006-01-02")
 	}
 
-	totalAmount, totalOrders, err := s.orderRepo.GetDailySales(ctx, storeID, date)
+	// Parse date and compute start/end in local timezone
+	loc := time.Now().Location()
+	t, err := time.ParseInLocation("2006-01-02", date, loc)
+	if err != nil {
+		t = time.Now()
+	}
+	start := time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, loc)
+	end := start.AddDate(0, 0, 1)
+
+	totalAmount, totalOrders, err := s.orderRepo.GetDailySales(ctx, storeID, start, end)
 	if err != nil {
 		return nil, err
 	}

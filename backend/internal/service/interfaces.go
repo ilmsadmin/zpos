@@ -13,6 +13,8 @@ type AuthService interface {
 	Register(ctx context.Context, storeID uuid.UUID, req *dto.RegisterRequest) (*dto.UserResponse, error)
 	RefreshToken(ctx context.Context, req *dto.RefreshTokenRequest) (*dto.LoginResponse, error)
 	ChangePassword(ctx context.Context, userID uuid.UUID, req *dto.ChangePasswordRequest) error
+	GetProfile(ctx context.Context, userID uuid.UUID) (*dto.UserResponse, error)
+	UpdateProfile(ctx context.Context, userID uuid.UUID, req *dto.UpdateProfileRequest) (*dto.UserResponse, error)
 	Logout(ctx context.Context, userID uuid.UUID) error
 }
 
@@ -104,6 +106,8 @@ type SupplierService interface {
 	List(ctx context.Context, storeID uuid.UUID, page, limit int, search string) ([]dto.SupplierResponse, int64, error)
 	Update(ctx context.Context, id uuid.UUID, req *dto.UpdateSupplierRequest) (*dto.SupplierResponse, error)
 	Delete(ctx context.Context, id uuid.UUID) error
+	GetPurchaseOrders(ctx context.Context, storeID, supplierID uuid.UUID, page, limit int) ([]dto.PurchaseOrderResponse, int64, error)
+	GetDebtSummary(ctx context.Context, storeID, supplierID uuid.UUID) (*dto.SupplierDebtSummary, error)
 }
 
 // WarrantyService defines the interface for warranty operations
@@ -147,9 +151,13 @@ type PurchaseOrderService interface {
 type StocktakeService interface {
 	Create(ctx context.Context, storeID, userID uuid.UUID, req *dto.CreateStocktakeRequest) (*dto.StocktakeResponse, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*dto.StocktakeResponse, error)
-	List(ctx context.Context, storeID uuid.UUID, page, limit int) ([]dto.StocktakeResponse, int64, error)
+	List(ctx context.Context, storeID uuid.UUID, params *dto.StocktakeListParams) ([]dto.StocktakeResponse, int64, error)
 	AddItem(ctx context.Context, stocktakeID uuid.UUID, req *dto.AddStocktakeItemRequest) (*dto.StocktakeItemResponse, error)
+	UpdateItem(ctx context.Context, stocktakeID, itemID uuid.UUID, req *dto.UpdateStocktakeItemRequest) (*dto.StocktakeItemResponse, error)
+	DeleteItem(ctx context.Context, stocktakeID, itemID uuid.UUID) error
 	Complete(ctx context.Context, id uuid.UUID) (*dto.StocktakeResponse, error)
+	Cancel(ctx context.Context, id uuid.UUID) (*dto.StocktakeResponse, error)
+	AddItemByBarcode(ctx context.Context, stocktakeID uuid.UUID, barcode string, countedQty int) (*dto.StocktakeItemResponse, error)
 }
 
 // DashboardService defines the interface for dashboard and reporting

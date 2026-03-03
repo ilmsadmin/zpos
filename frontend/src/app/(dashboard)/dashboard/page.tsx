@@ -221,12 +221,15 @@ export default function DashboardPage() {
                 <div key={item.id} className="flex items-start justify-between gap-2">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">
-                      {item.product_variant_id.slice(0, 8)}
+                      {item.product_name || "Không rõ"}
                     </p>
-                    <p className="text-xs text-muted-foreground">Tồn: {item.quantity}</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {item.variant_name && item.variant_name !== "Default" ? item.variant_name : item.sku}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Tồn: {item.available_qty}</p>
                   </div>
                   <Badge variant="destructive" className="shrink-0">
-                    {item.quantity}/{item.min_stock_level}
+                    {item.available_qty}/{item.min_stock_level}
                   </Badge>
                 </div>
               ))
