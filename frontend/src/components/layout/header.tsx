@@ -1,10 +1,11 @@
 "use client";
 
-import { Menu, Bell, Search } from "lucide-react";
+import { Menu, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Sidebar } from "./sidebar";
+import { NotificationDropdown } from "@/components/notification-dropdown";
 
 export function Header() {
   return (
@@ -35,13 +36,7 @@ export function Header() {
 
       {/* Actions */}
       <div className="flex items-center gap-2">
-        <Button variant="ghost" size="icon" className="relative">
-          <Bell className="h-5 w-5" />
-          <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-destructive rounded-full text-[10px] text-destructive-foreground flex items-center justify-center">
-            3
-          </span>
-          <span className="sr-only">Thông báo</span>
-        </Button>
+        <NotificationDropdown />
       </div>
     </header>
   );

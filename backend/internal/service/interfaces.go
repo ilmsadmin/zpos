@@ -121,6 +121,7 @@ type WarrantyService interface {
 	Update(ctx context.Context, id uuid.UUID, req *dto.UpdateWarrantyRequest) (*dto.WarrantyResponse, error)
 	Void(ctx context.Context, id uuid.UUID) error
 	Lookup(ctx context.Context, query string) ([]dto.WarrantyResponse, error)
+	PublicLookup(ctx context.Context, query string) ([]dto.PublicWarrantyResponse, error)
 	CreateClaim(ctx context.Context, warrantyID, userID uuid.UUID, req *dto.CreateWarrantyClaimRequest) (*dto.WarrantyClaimResponse, error)
 	GetClaimByID(ctx context.Context, claimID uuid.UUID) (*dto.WarrantyClaimResponse, error)
 	UpdateClaim(ctx context.Context, claimID uuid.UUID, req *dto.UpdateWarrantyClaimRequest) (*dto.WarrantyClaimResponse, error)
@@ -165,4 +166,16 @@ type DashboardService interface {
 	GetSummary(ctx context.Context, storeID uuid.UUID) (*dto.DashboardSummary, error)
 	GetSalesChart(ctx context.Context, storeID uuid.UUID, period string, days int) ([]dto.SalesChartPoint, error)
 	GetTopProducts(ctx context.Context, storeID uuid.UUID, limit int) ([]dto.TopProductItem, error)
+}
+
+// NotificationService defines the interface for notification operations
+type NotificationService interface {
+	List(ctx context.Context, storeID, userID uuid.UUID, params *dto.NotificationListParams) ([]dto.NotificationResponse, int64, error)
+	GetUnreadCount(ctx context.Context, storeID, userID uuid.UUID) (int64, error)
+	MarkAsRead(ctx context.Context, id string) error
+	MarkAllAsRead(ctx context.Context, storeID, userID uuid.UUID) error
+	GetPreferences(ctx context.Context, userID uuid.UUID) (*dto.NotificationPreferences, error)
+	SavePreferences(ctx context.Context, userID uuid.UUID, prefs *dto.NotificationPreferences) error
+	CreateNotification(ctx context.Context, req *dto.CreateNotificationRequest) error
+	NotifyStoreUsers(ctx context.Context, storeID uuid.UUID, notifType, title, message, severity string, data map[string]interface{})
 }

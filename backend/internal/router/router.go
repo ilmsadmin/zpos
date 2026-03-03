@@ -23,6 +23,7 @@ type Handlers struct {
 	PurchaseOrder *handler.PurchaseOrderHandler
 	Stocktake     *handler.StocktakeHandler
 	Dashboard     *handler.DashboardHandler
+	Notification  *handler.NotificationHandler
 }
 
 func Setup(app *fiber.App, h *Handlers, jwtManager *auth.JWTManager, permChecker middleware.PermissionChecker) {
@@ -42,6 +43,10 @@ func Setup(app *fiber.App, h *Handlers, jwtManager *auth.JWTManager, permChecker
 	authGroup.Post("/login", middleware.StrictRateLimiter(), h.Auth.Login)
 	authGroup.Post("/register", middleware.StrictRateLimiter(), h.Auth.Register)
 	authGroup.Post("/refresh", h.Auth.RefreshToken)
+
+	// Public routes (no auth required)
+	publicGroup := api.Group("/public")
+	publicGroup.Get("/warranty/lookup", h.Warranty.PublicLookup)
 
 	// Auth routes (authenticated)
 	authProtected := authGroup.Group("", middleware.AuthMiddleware(jwtManager))
@@ -193,4 +198,13 @@ func Setup(app *fiber.App, h *Handlers, jwtManager *auth.JWTManager, permChecker
 	stocktakes.Post("/:id/complete", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.Complete)
 	stocktakes.Post("/:id/cancel", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.Cancel)
 	stocktakes.Get("/:id", middleware.RequirePermission(permChecker, middleware.PermStocktake), h.Stocktake.GetByID)
+
+	// Notification routes (no specific permission required, scoped to authenticated user)
+	notifications := protected.Group("/notifications")
+	notifications.Get("/", h.Notification.List)
+	notifications.Get("/unread-count", h.Notification.GetUnreadCount)
+	notifications.Get("/preferences", h.Notification.GetPreferences)
+	notifications.Put("/preferences", h.Notification.SavePreferences)
+	notifications.Put("/read-all", h.Notification.MarkAllAsRead)
+	notifications.Put("/:id/read", h.Notification.MarkAsRead)
 }

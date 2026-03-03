@@ -19,6 +19,7 @@ type orderService struct {
 	customerRepo   repository.CustomerRepository
 	productRepo    repository.ProductRepository
 	posSessionRepo repository.POSSessionRepository
+	notifSvc       NotificationService
 }
 
 func NewOrderService(
@@ -28,8 +29,9 @@ func NewOrderService(
 	customerRepo repository.CustomerRepository,
 	productRepo repository.ProductRepository,
 	posSessionRepo repository.POSSessionRepository,
+	notifSvc ...NotificationService,
 ) OrderService {
-	return &orderService{
+	svc := &orderService{
 		orderRepo:      orderRepo,
 		invRepo:        invRepo,
 		variantRepo:    variantRepo,
@@ -37,6 +39,10 @@ func NewOrderService(
 		productRepo:    productRepo,
 		posSessionRepo: posSessionRepo,
 	}
+	if len(notifSvc) > 0 {
+		svc.notifSvc = notifSvc[0]
+	}
+	return svc
 }
 
 func (s *orderService) Create(ctx context.Context, storeID, userID uuid.UUID, req *dto.CreateOrderRequest) (*dto.OrderResponse, error) {
@@ -180,6 +186,42 @@ func (s *orderService) Create(ctx context.Context, storeID, userID uuid.UUID, re
 			newSales := session.TotalSales + order.TotalAmount
 			newOrders := session.TotalOrders + 1
 			_ = s.posSessionRepo.UpdateSales(ctx, session.ID, newSales, newOrders)
+		}
+	}
+
+	// Send notifications
+	if s.notifSvc != nil {
+		// Notify: new order
+		go s.notifSvc.NotifyStoreUsers(context.Background(), storeID,
+			"new_order",
+			"Đơn hàng mới",
+			fmt.Sprintf("Đơn hàng %s - %.0fđ", order.OrderNumber, order.TotalAmount),
+			"info",
+			map[string]interface{}{
+				"order_id":     order.ID.String(),
+				"order_number": order.OrderNumber,
+				"total_amount": order.TotalAmount,
+			},
+		)
+
+		// Notify: low stock after deducting
+		for _, item := range order.Items {
+			inv, err := s.invRepo.GetByVariantID(ctx, storeID, item.ProductVariantID)
+			if err == nil && inv.IsLowStock() {
+				go s.notifSvc.NotifyStoreUsers(context.Background(), storeID,
+					"low_stock",
+					"Cảnh báo tồn kho thấp",
+					fmt.Sprintf("%s - %s: còn %d sản phẩm", item.ProductName, item.VariantName, inv.Quantity),
+					"warning",
+					map[string]interface{}{
+						"variant_id":   item.ProductVariantID.String(),
+						"product_name": item.ProductName,
+						"variant_name": item.VariantName,
+						"quantity":     inv.Quantity,
+						"min_stock":    inv.MinStockLevel,
+					},
+				)
+			}
 		}
 	}
 

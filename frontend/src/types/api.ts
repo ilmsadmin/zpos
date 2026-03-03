@@ -578,6 +578,34 @@ export interface AddStocktakeItemByBarcodeRequest {
 }
 
 // --- Dashboard ---
+
+// --- Notification ---
+export interface NotificationResponse {
+  id: string;
+  store_id: string;
+  user_id?: string;
+  type: string;
+  title: string;
+  message: string;
+  severity: "info" | "warning" | "error" | "critical";
+  data?: Record<string, unknown>;
+  is_read: boolean;
+  read_at?: string;
+  created_at: string;
+}
+
+export interface NotificationPreferences {
+  new_order: boolean;
+  low_stock: boolean;
+  warranty_expiry: boolean;
+  warranty_request: boolean;
+  daily_report: boolean;
+}
+
+export interface UpdateNotificationPrefsRequest {
+  preferences: NotificationPreferences;
+}
+
 export interface DashboardSummary {
   today_revenue: number;
   today_orders: number;

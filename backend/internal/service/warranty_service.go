@@ -14,10 +14,15 @@ import (
 
 type warrantyService struct {
 	warrantyRepo repository.WarrantyRepository
+	notifSvc     NotificationService
 }
 
-func NewWarrantyService(warrantyRepo repository.WarrantyRepository) WarrantyService {
-	return &warrantyService{warrantyRepo: warrantyRepo}
+func NewWarrantyService(warrantyRepo repository.WarrantyRepository, notifSvc ...NotificationService) WarrantyService {
+	svc := &warrantyService{warrantyRepo: warrantyRepo}
+	if len(notifSvc) > 0 {
+		svc.notifSvc = notifSvc[0]
+	}
+	return svc
 }
 
 func (s *warrantyService) Create(ctx context.Context, storeID uuid.UUID, req *dto.CreateWarrantyRequest) (*dto.WarrantyResponse, error) {
@@ -228,6 +233,23 @@ func (s *warrantyService) CreateClaim(ctx context.Context, warrantyID, userID uu
 		return nil, appErrors.Internal(fmt.Errorf("failed to create warranty claim: %w", err))
 	}
 
+	// Notify store users about new warranty claim
+	if s.notifSvc != nil {
+		go s.notifSvc.NotifyStoreUsers(context.Background(), warranty.StoreID,
+			"warranty_request",
+			"Yêu cầu bảo hành mới",
+			fmt.Sprintf("Yêu cầu %s - %s: %s", claimNumber, warranty.WarrantyCode, req.Issue),
+			"info",
+			map[string]interface{}{
+				"claim_id":      claim.ID.String(),
+				"claim_number":  claimNumber,
+				"warranty_id":   warrantyID.String(),
+				"warranty_code": warranty.WarrantyCode,
+				"issue":         req.Issue,
+			},
+		)
+	}
+
 	return toWarrantyClaimResponse(claim), nil
 }
 
@@ -264,6 +286,49 @@ func (s *warrantyService) UpdateClaim(ctx context.Context, claimID uuid.UUID, re
 
 func (s *warrantyService) CheckWarranty(ctx context.Context, code string) (*dto.WarrantyResponse, error) {
 	return s.GetByCode(ctx, code)
+}
+
+func (s *warrantyService) PublicLookup(ctx context.Context, query string) ([]dto.PublicWarrantyResponse, error) {
+	var allWarranties []model.Warranty
+
+	// Try warranty code
+	if w, err := s.warrantyRepo.GetByCode(ctx, query); err == nil {
+		allWarranties = append(allWarranties, *w)
+	}
+
+	// Try serial number
+	if results, err := s.warrantyRepo.GetBySerialNumber(ctx, query); err == nil {
+		allWarranties = appendUnique(allWarranties, results)
+	}
+
+	// Try customer phone
+	if results, err := s.warrantyRepo.GetByCustomerPhone(ctx, query); err == nil {
+		allWarranties = appendUnique(allWarranties, results)
+	}
+
+	var responses []dto.PublicWarrantyResponse
+	for i := range allWarranties {
+		w := &allWarranties[i]
+		claims, _ := s.warrantyRepo.GetClaimsByWarrantyID(ctx, w.ID)
+
+		resp := toPublicWarrantyResponse(w, claims)
+		// Populate customer name (masked phone)
+		if customer, err := s.warrantyRepo.GetCustomerByID(ctx, w.CustomerID); err == nil {
+			resp.CustomerName = customer.FullName
+			if len(customer.Phone) > 6 {
+				resp.CustomerPhone = customer.Phone[:4] + "****" + customer.Phone[len(customer.Phone)-2:]
+			} else {
+				resp.CustomerPhone = customer.Phone
+			}
+		}
+		// Populate product & variant names
+		if variant, err := s.warrantyRepo.GetVariantByID(ctx, w.ProductVariantID); err == nil {
+			resp.VariantName = variant.Name
+			resp.ProductName = variant.SKU
+		}
+		responses = append(responses, *resp)
+	}
+	return responses, nil
 }
 
 func (s *warrantyService) GetClaimByID(ctx context.Context, claimID uuid.UUID) (*dto.WarrantyClaimResponse, error) {
@@ -439,4 +504,45 @@ func toWarrantyClaimResponse(c *model.WarrantyClaim) *dto.WarrantyClaimResponse 
 		Images:          []string(c.Images),
 		CreatedAt:       c.CreatedAt,
 	}
+}
+
+func toPublicWarrantyResponse(w *model.Warranty, claims []model.WarrantyClaim) *dto.PublicWarrantyResponse {
+	displayStatus := w.Status
+	daysRemaining := w.DaysRemaining()
+	if w.Status == model.WarrantyStatusActive {
+		if time.Now().After(w.EndDate) {
+			displayStatus = "expired"
+			daysRemaining = 0
+		} else if daysRemaining <= 30 {
+			displayStatus = "expiring"
+		}
+	}
+
+	resp := &dto.PublicWarrantyResponse{
+		WarrantyCode:   w.WarrantyCode,
+		SerialNumber:   w.SerialNumber,
+		StartDate:      w.StartDate,
+		EndDate:        w.EndDate,
+		WarrantyMonths: w.WarrantyMonths,
+		Status:         displayStatus,
+		DaysRemaining:  daysRemaining,
+		Terms:          w.Terms,
+	}
+
+	if claims != nil {
+		for i := range claims {
+			resp.Claims = append(resp.Claims, dto.PublicWarrantyClaimResponse{
+				ClaimNumber:   claims[i].ClaimNumber,
+				Issue:         claims[i].Issue,
+				Status:        claims[i].Status,
+				Resolution:    claims[i].Resolution,
+				ReceivedDate:  claims[i].ReceivedDate,
+				CompletedDate: claims[i].CompletedDate,
+				ReturnedDate:  claims[i].ReturnedDate,
+				CreatedAt:     claims[i].CreatedAt,
+			})
+		}
+	}
+
+	return resp
 }

@@ -229,6 +229,35 @@ type UpdateWarrantyRequest struct {
 	Notes        string `json:"notes"`
 }
 
+// PublicWarrantyResponse is the warranty response for public customer lookup (no sensitive data)
+type PublicWarrantyResponse struct {
+	WarrantyCode   string                        `json:"warranty_code"`
+	SerialNumber   string                        `json:"serial_number"`
+	ProductName    string                        `json:"product_name"`
+	VariantName    string                        `json:"variant_name"`
+	CustomerName   string                        `json:"customer_name"`
+	CustomerPhone  string                        `json:"customer_phone"`
+	StartDate      time.Time                     `json:"start_date"`
+	EndDate        time.Time                     `json:"end_date"`
+	WarrantyMonths int                           `json:"warranty_months"`
+	Status         string                        `json:"status"`
+	DaysRemaining  int                           `json:"days_remaining"`
+	Terms          string                        `json:"terms"`
+	Claims         []PublicWarrantyClaimResponse `json:"claims,omitempty"`
+}
+
+// PublicWarrantyClaimResponse is the claim response for public customer lookup
+type PublicWarrantyClaimResponse struct {
+	ClaimNumber   string     `json:"claim_number"`
+	Issue         string     `json:"issue"`
+	Status        string     `json:"status"`
+	Resolution    string     `json:"resolution"`
+	ReceivedDate  *time.Time `json:"received_date"`
+	CompletedDate *time.Time `json:"completed_date"`
+	ReturnedDate  *time.Time `json:"returned_date"`
+	CreatedAt     time.Time  `json:"created_at"`
+}
+
 type WarrantyClaimResponse struct {
 	ID              uuid.UUID  `json:"id"`
 	WarrantyID      uuid.UUID  `json:"warranty_id"`

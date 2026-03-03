@@ -29,41 +29,18 @@ import { PageHeader } from "@/components/page-header";
 import { useAuthStore } from "@/stores/auth-store";
 import { authService } from "@/services/auth-service";
 import { storeService } from "@/services/store-service";
+import { notificationService } from "@/services/notification-service";
 import { cn } from "@/lib/utils";
+import type { NotificationPreferences } from "@/types/api";
 
-// --- Notification preferences (localStorage) ---
-const NOTIFICATION_STORAGE_KEY = "zplus-notification-prefs";
-
-interface NotificationPrefs {
-  new_order: boolean;
-  low_stock: boolean;
-  warranty_expiry: boolean;
-  warranty_request: boolean;
-  daily_report: boolean;
-}
-
-const defaultNotificationPrefs: NotificationPrefs = {
+// --- Notification preferences (server-backed) ---
+const defaultNotificationPrefs: NotificationPreferences = {
   new_order: true,
   low_stock: true,
   warranty_expiry: false,
   warranty_request: true,
   daily_report: false,
 };
-
-function loadNotificationPrefs(): NotificationPrefs {
-  if (typeof window === "undefined") return defaultNotificationPrefs;
-  try {
-    const raw = localStorage.getItem(NOTIFICATION_STORAGE_KEY);
-    if (raw) return { ...defaultNotificationPrefs, ...JSON.parse(raw) };
-  } catch {
-    // ignore
-  }
-  return defaultNotificationPrefs;
-}
-
-function saveNotificationPrefs(prefs: NotificationPrefs) {
-  localStorage.setItem(NOTIFICATION_STORAGE_KEY, JSON.stringify(prefs));
-}
 
 // --- Language preference (localStorage) ---
 const LANGUAGE_STORAGE_KEY = "zplus-language";
@@ -214,22 +191,37 @@ export default function SettingsPage() {
   };
 
   // ─── Notifications ─────────────────────────
-  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(defaultNotificationPrefs);
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(defaultNotificationPrefs);
+
+  const { data: serverNotifPrefs } = useQuery({
+    queryKey: ["notification-preferences"],
+    queryFn: () => notificationService.getPreferences(),
+  });
 
   useEffect(() => {
-    setNotifPrefs(loadNotificationPrefs());
-  }, []);
+    if (serverNotifPrefs) {
+      setNotifPrefs(serverNotifPrefs);
+    }
+  }, [serverNotifPrefs]);
 
-  const toggleNotif = (key: keyof NotificationPrefs) => {
+  const saveNotifPrefsMutation = useMutation({
+    mutationFn: (prefs: NotificationPreferences) =>
+      notificationService.savePreferences(prefs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
+    },
+  });
+
+  const toggleNotif = (key: keyof NotificationPreferences) => {
     const updated = { ...notifPrefs, [key]: !notifPrefs[key] };
     setNotifPrefs(updated);
-    saveNotificationPrefs(updated);
+    saveNotifPrefsMutation.mutate(updated);
     toast.success(
       updated[key] ? "Đã bật thông báo" : "Đã tắt thông báo"
     );
   };
 
-  const notificationItems: { key: keyof NotificationPrefs; title: string; desc: string }[] = [
+  const notificationItems: { key: keyof NotificationPreferences; title: string; desc: string }[] = [
     { key: "new_order", title: "Đơn hàng mới", desc: "Nhận thông báo khi có đơn hàng mới" },
     { key: "low_stock", title: "Tồn kho thấp", desc: "Cảnh báo khi sản phẩm sắp hết hàng" },
     { key: "warranty_expiry", title: "Bảo hành hết hạn", desc: "Nhắc nhở khi bảo hành sắp hết hạn" },

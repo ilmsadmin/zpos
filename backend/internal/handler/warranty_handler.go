@@ -99,6 +99,30 @@ func (h *WarrantyHandler) Lookup(c *fiber.Ctx) error {
 	return response.Success(c, results)
 }
 
+// PublicLookup godoc
+// @Summary Public warranty lookup for customers
+// @Tags Public
+// @Produce json
+// @Param q query string true "Warranty code, serial number, or phone number"
+// @Success 200 {array} dto.PublicWarrantyResponse
+// @Router /api/v1/public/warranty/lookup [get]
+func (h *WarrantyHandler) PublicLookup(c *fiber.Ctx) error {
+	query := c.Query("q")
+	if query == "" {
+		return response.Error(c, appErrors.BadRequest("Vui lòng nhập mã bảo hành, số serial hoặc số điện thoại"))
+	}
+
+	if len(query) < 3 {
+		return response.Error(c, appErrors.BadRequest("Từ khóa tìm kiếm phải có ít nhất 3 ký tự"))
+	}
+
+	results, err := h.warrantyService.PublicLookup(c.Context(), query)
+	if err != nil {
+		return response.ErrorFromErr(c, err)
+	}
+	return response.Success(c, results)
+}
+
 // GetExpiring godoc
 // @Summary Get expiring warranties
 // @Tags Warranties

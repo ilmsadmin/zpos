@@ -15,6 +15,7 @@ import (
 	"github.com/zplus/pos/internal/config"
 	"github.com/zplus/pos/internal/handler"
 	"github.com/zplus/pos/internal/middleware"
+	"github.com/zplus/pos/internal/repository"
 	"github.com/zplus/pos/internal/repository/postgres"
 	"github.com/zplus/pos/internal/router"
 	"github.com/zplus/pos/internal/service"
@@ -104,9 +105,12 @@ func (s *Server) Initialize() error {
 	posSessionRepo := postgres.NewPOSSessionRepository(s.pg)
 	purchaseOrderRepo := postgres.NewPurchaseOrderRepository(s.pg)
 	stocktakeRepo := postgres.NewStocktakeRepository(s.pg)
+	notifRepo := repository.NewMongoNotificationRepository(s.mongo)
 
 	// Initialize services
 	validate := validator.New()
+
+	notifSvc := service.NewNotificationService(notifRepo, userRepo, s.log)
 
 	authSvc := service.NewAuthService(userRepo, roleRepo, s.jwt, s.log)
 	userSvc := service.NewUserService(userRepo, roleRepo, s.jwt)
@@ -115,10 +119,10 @@ func (s *Server) Initialize() error {
 	categorySvc := service.NewCategoryService(categoryRepo)
 	productSvc := service.NewProductService(productRepo, variantRepo, categoryRepo, inventoryRepo)
 	inventorySvc := service.NewInventoryService(inventoryRepo, variantRepo)
-	orderSvc := service.NewOrderService(orderRepo, inventoryRepo, variantRepo, customerRepo, productRepo, posSessionRepo)
+	orderSvc := service.NewOrderService(orderRepo, inventoryRepo, variantRepo, customerRepo, productRepo, posSessionRepo, notifSvc)
 	customerSvc := service.NewCustomerService(customerRepo, orderRepo, warrantyRepo)
 	supplierSvc := service.NewSupplierService(supplierRepo, purchaseOrderRepo, variantRepo, productRepo)
-	warrantySvc := service.NewWarrantyService(warrantyRepo)
+	warrantySvc := service.NewWarrantyService(warrantyRepo, notifSvc)
 	posSessionSvc := service.NewPOSSessionService(posSessionRepo, orderRepo, userRepo)
 	purchaseOrderSvc := service.NewPurchaseOrderService(purchaseOrderRepo, supplierRepo, inventoryRepo, variantRepo, productRepo)
 	stocktakeSvc := service.NewStocktakeService(stocktakeRepo, inventoryRepo, variantRepo)
@@ -141,6 +145,7 @@ func (s *Server) Initialize() error {
 		PurchaseOrder: handler.NewPurchaseOrderHandler(purchaseOrderSvc, validate),
 		Stocktake:     handler.NewStocktakeHandler(stocktakeSvc, validate),
 		Dashboard:     handler.NewDashboardHandler(dashboardSvc),
+		Notification:  handler.NewNotificationHandler(notifSvc, validate),
 	}
 
 	// Initialize permission checker and setup routes
