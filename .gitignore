@@ -50,6 +50,10 @@ temp/
 # Go
 vendor/
 backend/main
+backend/api
 
 # Backups
 backups/
+
+# Deploy (local server config - contains secrets)
+deploy/.env.server.local

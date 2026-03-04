@@ -1,3 +1,8 @@
+# ==========================================
+# LOCAL DEVELOPMENT CONFIG ONLY
+# DO NOT use these values in production!
+# Production uses config.prod.yaml + env vars
+# ==========================================
 app:
   name: zplus-pos
   version: 1.0.0

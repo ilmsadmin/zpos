@@ -133,10 +133,70 @@ docker-down: ## Stop all Docker services
 	docker compose down
 
 docker-build: ## Build production Docker images
-	docker compose -f docker-compose.prod.yml build
+	docker compose -f docker-compose.prod.yml build --no-cache
 
 docker-push: ## Push Docker images to registry
 	docker compose -f docker-compose.prod.yml push
+
+# ==========================================
+# Production Deployment
+# ==========================================
+deploy: ## Deploy to production with Docker (local)
+	./scripts/deploy.sh up
+
+deploy-down: ## Stop production deployment (local)
+	./scripts/deploy.sh down
+
+deploy-status: ## Show production service status (local)
+	./scripts/deploy.sh status
+
+deploy-logs: ## View production logs (local)
+	./scripts/deploy.sh logs
+
+deploy-restart: ## Restart production services (local)
+	./scripts/deploy.sh restart
+
+deploy-clean: ## Remove all production containers, volumes, and images (local)
+	./scripts/deploy.sh clean
+
+# ==========================================
+# Remote Server Deployment (via Docker Registry)
+# ==========================================
+server-setup: ## First-time remote server setup (Docker + Registry)
+	./deploy/deploy-server.sh setup
+
+server-deploy: ## Build, push, and deploy to remote server
+	./deploy/deploy-server.sh deploy
+
+server-push: ## Build and push images to registry only
+	./deploy/deploy-server.sh push
+
+server-pull: ## Pull latest images and restart on server
+	./deploy/deploy-server.sh pull
+
+server-status: ## Show service status on remote server
+	./deploy/deploy-server.sh status
+
+server-logs: ## View logs on remote server
+	./deploy/deploy-server.sh logs
+
+server-restart: ## Restart services on remote server
+	./deploy/deploy-server.sh restart
+
+server-stop: ## Stop services on remote server
+	./deploy/deploy-server.sh stop
+
+server-clean: ## Remove everything on remote server
+	./deploy/deploy-server.sh clean
+
+server-backup: ## Backup databases on remote server
+	./deploy/deploy-server.sh backup
+
+server-rollback: ## Rollback to previous version on server
+	./deploy/deploy-server.sh rollback
+
+server-ssh: ## Open SSH session to server
+	./deploy/deploy-server.sh ssh
 
 docker-logs: ## View Docker service logs
 	docker compose logs -f

@@ -1,0 +1,44 @@
+app:
+  name: zplus-pos
+  version: 1.0.0
+  env: production
+  port: 8080
+  allow_origins: "${ALLOW_ORIGINS}"
+  timezone: "Asia/Ho_Chi_Minh"
+
+postgres:
+  host: postgres
+  port: 5432
+  user: "${PG_USER}"
+  password: "${PG_PASSWORD}"
+  database: "${PG_DATABASE}"
+  ssl_mode: disable
+  max_conns: 50
+  min_conns: 10
+
+mongodb:
+  uri: "mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb:27017/${MONGO_DATABASE}?authSource=admin"
+  database: "${MONGO_DATABASE}"
+
+redis:
+  host: redis
+  port: 6379
+  password: "${REDIS_PASSWORD}"
+  db: 0
+
+auth:
+  access_token_duration: 15m
+  refresh_token_duration: 168h
+  token_secret: "${AUTH_TOKEN_SECRET}"
+
+storage:
+  type: minio
+  minio:
+    endpoint: "minio:9000"
+    access_key: "${MINIO_ACCESS_KEY}"
+    secret_key: "${MINIO_SECRET_KEY}"
+    bucket: zplus-pos
+    use_ssl: false
+
+nats:
+  url: "nats://nats:4222"

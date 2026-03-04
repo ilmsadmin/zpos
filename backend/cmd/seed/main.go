@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -84,7 +85,10 @@ func main() {
 	fmt.Println("✅ Staff role created/found")
 
 	// 4. Create admin user
-	adminPassword := "Admin@123"
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
+	if adminPassword == "" {
+		adminPassword = "Admin@123"
+	}
 	hashedPassword, err := auth.HashPassword(adminPassword, nil)
 	if err != nil {
 		log.Fatalf("Failed to hash password: %v", err)
@@ -108,12 +112,45 @@ func main() {
 	}
 
 	fmt.Println("✅ Admin user created/updated successfully!")
+
+	// 5. Create toan@zplus.vn super admin user
+	toanPassword := os.Getenv("TOAN_PASSWORD")
+	if toanPassword == "" {
+		toanPassword = "ChangeMe@123"
+	}
+	toanHashedPassword, err := auth.HashPassword(toanPassword, nil)
+	if err != nil {
+		log.Fatalf("Failed to hash toan password: %v", err)
+	}
+
+	toanID := uuid.New()
+	toanEmail := "toan@zplus.vn"
+
+	_, err = pool.Exec(ctx, `
+		INSERT INTO users (id, store_id, role_id, email, password_hash, full_name, phone, avatar_url, is_active, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, '', true, $8, $9)
+		ON CONFLICT (email) DO UPDATE SET
+			role_id = EXCLUDED.role_id,
+			password_hash = EXCLUDED.password_hash,
+			avatar_url = '',
+			updated_at = NOW()
+	`, toanID, storeID, roleID, toanEmail, toanHashedPassword, "Toan Le", "0123456789", now, now)
+	if err != nil {
+		log.Fatalf("Failed to create toan user: %v", err)
+	}
+
+	fmt.Println("✅ Toan user created/updated successfully!")
+
 	fmt.Println()
 	fmt.Println("╔══════════════════════════════════════════╗")
 	fmt.Println("║         Admin Account Details            ║")
 	fmt.Println("╠══════════════════════════════════════════╣")
 	fmt.Printf("║  Email:    %-29s ║\n", adminEmail)
 	fmt.Printf("║  Password: %-29s ║\n", adminPassword)
+	fmt.Println("║  Role:     Super Admin                   ║")
+	fmt.Println("╠══════════════════════════════════════════╣")
+	fmt.Printf("║  Email:    %-29s ║\n", toanEmail)
+	fmt.Printf("║  Password: %-29s ║\n", toanPassword)
 	fmt.Println("║  Role:     Super Admin                   ║")
 	fmt.Println("╚══════════════════════════════════════════╝")
 }
